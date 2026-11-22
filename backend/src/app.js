@@ -1,0 +1,182 @@
+/**
+ * Express Application Setup
+ * Main application configuration and middleware
+ */
+
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import config from './config/env.js';
+import logger from './utils/logger.js';
+
+// Import routes
+import authRoutes from './auth/auth.routes.js';
+import scanRoutes from './scans/scan.routes.js';
+import userRoutes from './users/user.routes.js';
+import adminRoutes from './admin/admin.routes.js';
+import reportRoutes from './reports/report.routes.js';
+import auditRoutes from './audit/audit.routes.js';
+import notificationRoutes from './notifications/notification.routes.js';
+import caseRoutes from './cases/case.routes.js';
+import learningRoutes from './learning/learning.routes.js';
+
+const app = express();
+
+// Security middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+// CORS configuration
+// Allow multiple origins for development (ports 3000-3005)
+const allowedOrigins = config.frontend.url
+  ? [config.frontend.url]
+  : [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003',
+    'http://localhost:3004',
+    'http://localhost:3005',
+  ];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // In development, allow any localhost origin
+      if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Rate limiting with localhost/development bypass
+const limiter = rateLimit({
+  windowMs: config.rateLimit.windowMs,
+  max: config.rateLimit.maxRequests,
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting for localhost and Docker internal networks
+  skip: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    // Whitelist localhost, loopback, and Docker network IPs
+    const whitelistedIPs = [
+      '127.0.0.1',
+      '::1',
+      '::ffff:127.0.0.1',
+      'localhost',
+    ];
+    // Check if IP is whitelisted or is a Docker internal network (172.x.x.x)
+    const isWhitelisted = whitelistedIPs.some(whitelistedIP => ip.includes(whitelistedIP));
+    const isDockerNetwork = ip.includes('172.') || ip.includes('::ffff:172.');
+
+    if (isWhitelisted || isDockerNetwork) {
+      return true; // Skip rate limiting
+    }
+    return false;
+  },
+});
+
+app.use('/api/', limiter);
+
+// Body parsing middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path} - IP: ${req.ip}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    service: 'deepfake-detection-backend',
+    version: '1.0.0',
+  });
+});
+
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/scans', scanRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin/learning', learningRoutes);
+app.use('/api/admin/audit', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/cases', caseRoutes);
+app.use('/api/reports', reportRoutes);
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
+
+  // Multer errors
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        error: 'File too large',
+        message: `File size exceeds maximum allowed size of ${config.upload.maxFileSize / 1000000}MB`,
+      });
+    }
+    return res.status(400).json({
+      error: 'Upload error',
+      message: err.message,
+    });
+  }
+
+  // Validation errors
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation error',
+      message: err.message,
+    });
+  }
+
+  // JWT errors
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      error: 'Authentication error',
+      message: 'Invalid or expired token',
+    });
+  }
+
+  // Default error
+  res.status(err.status || 500).json({
+    error: 'Internal server error',
+    message: config.server.nodeEnv === 'development' ? err.message : 'An error occurred',
+    ...(config.server.nodeEnv === 'development' && { stack: err.stack }),
+  });
+});
+
+export default app;
+

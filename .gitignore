@@ -1,0 +1,92 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+**/node_modules/
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+/dist
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (NEVER commit these!)
+.env*
+.env.local
+.env.production
+.env.*.local
+!.env.example
+!backend/.env.example
+
+# Backups and scratch scripts
+backup_*/
+**/backup_*/
+project_ownership_transfer/
+**/project_ownership_transfer/
+kar.py
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# ML models (too large for GitHub)
+deepfake-detector-model-v1/
+ml-service/model/
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# Logs
+*.log
+logs/
+ml-service.log
+
+# Test files and directories
+test_images/
+test of ml pipeline/
+test_*.py
+*_test.py
+*_test.js
+
+# Uploads
+uploads/
+**/uploads/
+
+# IDE
+.vscode/
+.idea/
+.cursor/plans
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
