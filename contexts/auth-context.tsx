@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { getApiUrl } from "@/lib/api"
 
 export interface User {
   id: string
@@ -66,9 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
-      
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(getApiUrl("/auth/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -114,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Login error:", error)
       // Handle network errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error("Unable to connect to server. Please ensure the backend is running.")
+        throw new Error("Unable to connect to server. If the backend is running on Render free tier, it may take 30-50s to wake up from sleep. Please wait a moment and try again.")
       }
       throw error
     }
@@ -122,9 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = useCallback(async (idToken: string) => {
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
-      
-      const response = await fetch(`${API_BASE_URL}/auth/google`, {
+      const response = await fetch(getApiUrl("/auth/google"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -169,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Google login error:", error)
       // Handle network errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error("Unable to connect to server. Please ensure the backend is running.")
+        throw new Error("Unable to connect to server. If the backend is running on Render free tier, it may take 30-50s to wake up from sleep. Please wait a moment and try again.")
       }
       throw error
     }
@@ -177,9 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signup = useCallback(async (email: string, password: string) => {
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
-      
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await fetch(getApiUrl("/auth/register"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -225,7 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Signup error:", error)
       // Handle network errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error("Unable to connect to server. Please ensure the backend is running.")
+        throw new Error("Unable to connect to server. If the backend is running on Render free tier, it may take 30-50s to wake up from sleep. Please wait a moment and try again.")
       }
       throw error
     }
@@ -235,9 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user || !token) throw new Error("User not authenticated")
 
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
-
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      const response = await fetch(getApiUrl("/auth/me"), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

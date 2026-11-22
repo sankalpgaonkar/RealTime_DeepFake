@@ -72,7 +72,8 @@ const config = {
   ml: {
     serviceUrl: (() => {
       const raw = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001';
-      return (raw.startsWith('http://') || raw.startsWith('https://')) ? raw : `http://${raw}`;
+      if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+      return raw.includes('.onrender.com') ? `https://${raw}` : `http://${raw}`;
     })(),
     enabled: process.env.ML_SERVICE_ENABLED !== 'false',
     timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10),

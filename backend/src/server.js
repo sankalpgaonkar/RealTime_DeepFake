@@ -53,7 +53,11 @@ const startServer = async () => {
 
     // Connect to MongoDB
     logger.info('Connecting to database...');
-    await connectDB();
+    try {
+      await connectDB();
+    } catch (dbError) {
+      logger.error('Initial MongoDB connection error (server will start and retry in background):', dbError.message);
+    }
 
     // Initialize cache (optional - gracefully handles if Redis unavailable)
     try {

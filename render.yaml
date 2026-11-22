@@ -23,10 +23,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NEXT_PUBLIC_API_URL
-        value: https://veritrace-backend.onrender.com/api
-      - key: NEXT_PUBLIC_WS_URL
-        value: https://veritrace-backend.onrender.com
+      - key: BACKEND_HOST
+        fromService:
+          type: web
+          name: veritrace-backend
+          property: host
 
   # ----------------------------------------------------------------------------
   # 2. Backend API Service (Node.js Express + Socket.IO)
@@ -51,7 +52,7 @@ services:
       - key: ENCRYPTION_IV
         generateValue: true
       - key: MONGODB_URI
-        sync: false # Prompts you to enter your MongoDB Atlas URI during setup
+        value: mongodb+srv://sankalpgaonkar23_db_user:sankalp23@clusterdeepfake.0az4rg1.mongodb.net/deepfake-detection?retryWrites=true&w=majority
       - key: DB_NAME
         value: deepfake-detection
       - key: ML_SERVICE_URL

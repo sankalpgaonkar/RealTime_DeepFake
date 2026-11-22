@@ -3,7 +3,51 @@
  * Handles communication between the frontend and the Agentic Backend.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
+/**
+ * Dynamic API Base URL resolution:
+ * - In local browser: routes to http://localhost:3001/api
+ * - In cloud/production browser (Render): uses relative '/api' proxied via Next.js rewrites to backend
+ * - Server-side rendering (SSR): uses BACKEND_HOST, BACKEND_URL, or localhost:3001
+ */
+export function getApiBaseUrl(): string {
+  // If explicitly specified valid external URL (not the stale hardcoded placeholder)
+  if (
+    process.env.NEXT_PUBLIC_API_URL &&
+    process.env.NEXT_PUBLIC_API_URL !== "https://veritrace-backend.onrender.com/api" &&
+    !process.env.NEXT_PUBLIC_API_URL.includes("localhost")
+  ) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    // Local development
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://localhost:3001/api";
+    }
+    // Deployed production environment (e.g. Render) -> use relative same-origin '/api'
+    // Next.js rewrites in next.config.mjs proxies this to the backend without CORS blocks
+    return "/api";
+  }
+
+  if (process.env.BACKEND_HOST) {
+    return `https://${process.env.BACKEND_HOST}/api`;
+  }
+  if (process.env.BACKEND_URL) {
+    return `${process.env.BACKEND_URL.replace(/\/$/, "")}/api`;
+  }
+
+  return "http://localhost:3001/api";
+}
+
+export function getApiUrl(endpoint: string = ""): string {
+  const base = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${base}${cleanEndpoint}`;
+}
+
+const API_BASE_URL = getApiBaseUrl();
+
 
 export interface ScanFeedback {
   correctedVerdict: "AUTHENTIC" | "DEEPFAKE" | "SUSPICIOUS"
@@ -106,7 +150,7 @@ async function authenticatedRequest<T>(
 ): Promise<T> {
   const token = getToken()
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(getApiUrl(endpoint), {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -188,7 +232,7 @@ async function uploadFile<T>(
       reject(new Error("Network error"))
     })
 
-    xhr.open("POST", `${API_BASE_URL}${endpoint}`)
+    xhr.open("POST", getApiUrl(endpoint))
     if (token) {
       xhr.setRequestHeader("Authorization", `Bearer ${token}`)
     }
@@ -202,7 +246,7 @@ export const apiService = {
    */
   async register(email: string, password: string) {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await fetch(getApiUrl("/auth/register"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -231,7 +275,7 @@ export const apiService = {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error("Unable to connect to server. Please ensure the backend is running.")
+        throw new Error("Unable to connect to server. If the backend is hosted on Render free tier, it may take 30-50s to wake up from sleep. Please wait a moment and try again.")
       }
       throw error
     }
@@ -242,7 +286,7 @@ export const apiService = {
    */
   async login(email: string, password: string) {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(getApiUrl("/auth/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -271,7 +315,7 @@ export const apiService = {
     } catch (error) {
       // Handle network errors
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error("Unable to connect to server. Please ensure the backend is running.")
+        throw new Error("Unable to connect to server. If the backend is hosted on Render free tier, it may take 30-50s to wake up from sleep. Please wait a moment and try again.")
       }
       throw error
     }
@@ -341,7 +385,7 @@ export const apiService = {
         reject(new Error('Network error during upload'));
       });
 
-      xhr.open('POST', `${API_BASE_URL}/scans/batch`);
+      xhr.open('POST', getApiUrl('/scans/batch'));
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
@@ -449,7 +493,7 @@ export const apiService = {
    */
   async exportScanPDF(scanId: string): Promise<Blob> {
     const token = getToken()
-    const response = await fetch(`${API_BASE_URL}/reports/scans/${scanId}/pdf`, {
+    const response = await fetch(getApiUrl(`/reports/scans/${scanId}/pdf`), {
       method: "GET",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -468,7 +512,7 @@ export const apiService = {
    */
   async exportScanJSON(scanId: string): Promise<Blob> {
     const token = getToken()
-    const response = await fetch(`${API_BASE_URL}/reports/scans/${scanId}/json`, {
+    const response = await fetch(getApiUrl(`/reports/scans/${scanId}/json`), {
       method: "GET",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -503,7 +547,7 @@ export const apiService = {
     }
 
     const token = getToken()
-    const response = await fetch(`${API_BASE_URL}/reports/scans/csv?${params.toString()}`, {
+    const response = await fetch(getApiUrl(`/reports/scans/csv?${params.toString()}`), {
       method: "GET",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -1086,7 +1130,7 @@ export const apiService = {
     const query = queryParams.toString()
     const token = getToken()
 
-    const response = await fetch(`${API_BASE_URL}/admin/audit/export${query ? `?${query}` : ''}`, {
+    const response = await fetch(getApiUrl(`/admin/audit/export${query ? `?${query}` : ''}`), {
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
       },
