@@ -12,8 +12,10 @@ import logger from '../utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables
+// Load environment variables (supports root .env, backend/.env, and environment variables)
 dotenv.config({ path: join(__dirname, '../../.env') });
+dotenv.config({ path: join(__dirname, '../.env') });
+dotenv.config();
 
 const config = {
   server: {

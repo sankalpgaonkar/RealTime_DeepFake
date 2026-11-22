@@ -137,6 +137,7 @@ const startServer = async () => {
             allowedOrigins.has(origin) ||
             origin.includes('localhost') ||
             origin.includes('127.0.0.1') ||
+            origin.endsWith('.onrender.com') ||
             process.env.NODE_ENV === 'development'
           ) {
             return callback(null, true);

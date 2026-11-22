@@ -6,11 +6,21 @@
 import { io, Socket } from 'socket.io-client';
 
 const getSocketUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
+    return process.env.NEXT_PUBLIC_SOCKET_URL;
+  }
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname || 'localhost';
-    return process.env.NEXT_PUBLIC_SOCKET_URL || `http://${hostname}:3001`;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `http://${hostname}:3001`;
+    }
+    // If hosted on a cloud domain (e.g., Render / Vercel), fall back to same host or relative origin
+    return window.location.origin;
   }
-  return process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+  return 'http://localhost:3001';
 };
 
 let socket: Socket | null = null;

@@ -1,0 +1,104 @@
+# ==============================================================================
+# VERITRACE — Render Blueprint Specification (render.yaml)
+# https://render.com/docs/blueprint-spec
+#
+# This file provisions all services for the VERITRACE Deepfake Detection System:
+# 1. veritrace-frontend : Next.js tactical web UI
+# 2. veritrace-backend  : Node.js Express & Socket.IO orchestration API
+# 3. veritrace-ml       : Python PyTorch & Vision Transformer inference microservice
+# 4. veritrace-redis    : Managed Redis cache & queue (Internal network)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Frontend Web Service (Next.js)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: veritrace-frontend
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: veritrace-backend
+          property: host
+        value: https://veritrace-backend.onrender.com/api
+      - key: NEXT_PUBLIC_WS_URL
+        fromService:
+          type: web
+          name: veritrace-backend
+          property: host
+        value: https://veritrace-backend.onrender.com
+
+  # ----------------------------------------------------------------------------
+  # 2. Backend API Service (Node.js Express + Socket.IO)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: veritrace-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: ENCRYPTION_IV
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false # Prompts you to enter your MongoDB Atlas URI during setup
+      - key: DB_NAME
+        value: deepfake-detection
+      - key: ML_SERVICE_URL
+        fromService:
+          type: web
+          name: veritrace-ml
+          property: host
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: veritrace-frontend
+          property: host
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: veritrace-redis
+          property: connectionString
+
+  # ----------------------------------------------------------------------------
+  # 3. Machine Learning Inference Service (PyTorch / SigLIP)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: veritrace-ml
+    runtime: python
+    rootDir: ml-service
+    plan: starter # Starter plan (1GB+ RAM) recommended for PyTorch models
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180 app:app
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ML_ENV
+        value: production
+
+  # ----------------------------------------------------------------------------
+  # 4. Redis Cache & Asynchronous Queue
+  # ----------------------------------------------------------------------------
+  - type: redis
+    name: veritrace-redis
+    plan: free
+    ipAllowList: [] # Internal private network access only
