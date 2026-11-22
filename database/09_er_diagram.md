@@ -1,4 +1,4 @@
-# SENTINEL — Entity Relationship Diagram
+# VERITRACE — Entity Relationship Diagram
 
 ## UCS310 — Database Management System
 

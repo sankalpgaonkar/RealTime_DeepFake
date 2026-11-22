@@ -1,4 +1,4 @@
-# SENTINEL — Viva Commands Cheatsheet
+# VERITRACE — Viva Commands Cheatsheet
 ## UCS310 - Database Management System | Ms. Chinu Dhir
 
 Connect first: `sudo mariadb -u root sentinel_db`

@@ -15,8 +15,8 @@ Complete guide for deploying the Deepfake Detection System to production.
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/deepfake-detection-system.git
-cd deepfake-detection-system
+git clone https://github.com/your-org/RealTime_DeepFake.git
+cd RealTime_DeepFake
 ```
 
 ### 2. Configure Environment
@@ -392,6 +392,6 @@ pip install --upgrade -r requirements.txt
 ## Support
 
 For issues and questions:
-- GitHub Issues: https://github.com/your-org/deepfake-detection-system/issues
+- GitHub Issues: https://github.com/your-org/RealTime_DeepFake/issues
 - Documentation: https://docs.your-domain.com
 - Email: support@your-domain.com

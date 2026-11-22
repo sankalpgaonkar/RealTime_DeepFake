@@ -29,33 +29,41 @@ app.use(helmet({
 }));
 
 // CORS configuration
-// Allow multiple origins for development (ports 3000-3005)
-const allowedOrigins = config.frontend.url
-  ? [config.frontend.url]
-  : [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3003',
-    'http://localhost:3004',
-    'http://localhost:3005',
-  ];
+// Allow multiple origins for development (ports 3000-3005 and 127.0.0.1)
+const defaultAllowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://localhost:3003',
+  'http://localhost:3004',
+  'http://localhost:3005',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://127.0.0.1:3002',
+  'http://127.0.0.1:3003',
+  'http://127.0.0.1:3004',
+  'http://127.0.0.1:3005',
+];
+
+const allowedOrigins = new Set([
+  ...(config.frontend.url ? [config.frontend.url] : []),
+  ...defaultAllowedOrigins,
+]);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      // In development, allow any localhost origin
-      if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
+    if (
+      allowedOrigins.has(origin) ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      process.env.NODE_ENV === 'development'
+    ) {
+      return callback(null, true);
     }
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -100,6 +108,43 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path} - IP: ${req.ip}`);
   next();
+});
+
+// Root welcome endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'deepfake-detection-backend',
+    version: '1.0.0',
+    message: 'Deepfake Detection & Authenticity Verification API is running',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      auth: '/api/auth',
+      scans: '/api/scans',
+    },
+    frontend: config.frontend.url || 'http://localhost:3002',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Base API endpoint
+app.get('/api', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'deepfake-detection-backend',
+    version: '1.0.0',
+    message: 'Deepfake Detection API base route',
+    routes: [
+      '/api/auth',
+      '/api/scans',
+      '/api/users',
+      '/api/admin',
+      '/api/notifications',
+      '/api/cases',
+      '/api/reports',
+    ],
+  });
 });
 
 // Health check endpoint
@@ -150,6 +195,14 @@ app.use((err, req, res, next) => {
     }
     return res.status(400).json({
       error: 'Upload error',
+      message: err.message,
+    });
+  }
+
+  // File type filter errors from Multer
+  if (err.message && err.message.includes('Invalid file type')) {
+    return res.status(400).json({
+      error: 'Invalid file type',
       message: err.message,
     });
   }

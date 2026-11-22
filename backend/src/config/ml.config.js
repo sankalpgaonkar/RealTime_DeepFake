@@ -8,7 +8,7 @@ import logger from '../utils/logger.js';
 
 const mlConfig = {
   // ML Service URL (Python Flask/FastAPI service)
-  serviceUrl: process.env.ML_SERVICE_URL || 'http://localhost:5000',
+  serviceUrl: process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001',
   
   // ML Service Configuration
   enabled: process.env.ML_SERVICE_ENABLED !== 'false', // Default to enabled if env var not set

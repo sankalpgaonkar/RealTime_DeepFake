@@ -53,20 +53,11 @@ export function LoginForm() {
 
   const validGoogleClientId = isValidGoogleClientId(googleClientId)
 
-  // Warn if Google Client ID is missing or invalid
+  // Warn if Google Client ID is configured but invalid
   useEffect(() => {
-    if (!validGoogleClientId && typeof window !== 'undefined') {
-      console.error(
-        '❌ Google OAuth Configuration Error:\n' +
-        'NEXT_PUBLIC_GOOGLE_CLIENT_ID is missing or invalid.\n\n' +
-        'To fix this:\n' +
-        '1. Go to https://console.cloud.google.com/apis/credentials\n' +
-        '2. Create an OAuth 2.0 Client ID (Web application)\n' +
-        '3. Add authorized origin: http://localhost:3002\n' +
-        '4. Copy the Client ID\n' +
-        '5. Update .env.local with:\n' +
-        '   NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-actual-client-id.apps.googleusercontent.com\n\n' +
-        'Current value: ' + (googleClientId || '(empty)')
+    if (googleClientId && !validGoogleClientId && typeof window !== 'undefined') {
+      console.warn(
+        '⚠️ Google OAuth configuration warning: NEXT_PUBLIC_GOOGLE_CLIENT_ID is not a valid Google Client ID.'
       )
     }
   }, [googleClientId, validGoogleClientId])
@@ -265,12 +256,6 @@ export function LoginForm() {
                   <div ref={googleButtonLoginRef} className="w-full flex justify-center" />
                 </>
               )}
-              {!validGoogleClientId && (
-                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-[10px] font-mono flex items-center gap-2 uppercase tracking-tighter">
-                  <AlertTriangle size={14} />
-                  Google Sign-In not configured. Please set a valid NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local
-                </div>
-              )}
 
             </form>
           </TabsContent>
@@ -348,12 +333,6 @@ export function LoginForm() {
                   </div>
                   <div ref={googleButtonSignupRef} className="w-full flex justify-center" />
                 </>
-              )}
-              {!validGoogleClientId && (
-                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-[10px] font-mono flex items-center gap-2 uppercase tracking-tighter">
-                  <AlertTriangle size={14} />
-                  Google Sign-In not configured. Please set a valid NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local
-                </div>
               )}
 
             </form>

@@ -1,4 +1,4 @@
-# SENTINEL — Database Layer
+# VERITRACE — Database Layer
 
 ## UCS310 — Database Management System | Lab Submission
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This `database/` directory contains the complete **relational database implementation** of SENTINEL.  
+This `database/` directory contains the complete **relational database implementation** of VERITRACE.  
 It is evaluated as the DBMS course deliverable. The full-stack production app (Express + MongoDB + Next.js) exists separately in the project root.
 
 ---

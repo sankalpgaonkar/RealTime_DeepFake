@@ -35,6 +35,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [batchResults, setBatchResults] = useState<Array<{ fileName: string; scanId?: string; status?: string; error?: string; mediaType?: string }>>([])
   const [batchId, setBatchId] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const socketInitialized = useRef(false)
@@ -66,8 +67,32 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
     }
   }, [mediaPreview])
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || [])
+  const detectMediaType = (file: File): "image" | "video" | "audio" | null => {
+    const mime = (file.type || "").toLowerCase()
+    const ext = (file.name.substring(file.name.lastIndexOf('.')) || '').toLowerCase()
+
+    if (
+      mime.startsWith('image/') ||
+      ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif', '.heic', '.heif'].includes(ext)
+    ) {
+      return 'image'
+    }
+    if (
+      mime.startsWith('video/') ||
+      ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp', '.flv', '.wmv'].includes(ext)
+    ) {
+      return 'video'
+    }
+    if (
+      mime.startsWith('audio/') ||
+      ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma', '.opus'].includes(ext)
+    ) {
+      return 'audio'
+    }
+    return null
+  }
+
+  const processSelectedFiles = async (files: File[]) => {
     if (files.length === 0) return
 
     if (!isAuthenticated) {
@@ -82,22 +107,41 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
     } else {
       // Single file upload mode
       const file = files[0]
-      // Create preview URL for the file
       const previewUrl = URL.createObjectURL(file)
       setMediaPreview(previewUrl)
-
-      // Determine media type
-      if (file.type.startsWith('image/')) {
-        setMediaType('image')
-      } else if (file.type.startsWith('video/')) {
-        setMediaType('video')
-      } else if (file.type.startsWith('audio/')) {
-        setMediaType('audio')
-      } else {
-        setMediaType(null)
-      }
-
+      setMediaType(detectMediaType(file))
       await uploadAndScan(file)
+    }
+  }
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    await processSelectedFiles(files)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (status === "idle") {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    if (status !== "idle") return
+
+    const files = Array.from(e.dataTransfer.files || [])
+    if (files.length > 0) {
+      await processSelectedFiles(files)
     }
   }
 
@@ -169,38 +213,41 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
       setUploadProgress(100)
       setScanProgress(10)
 
-      // Use WebSocket for real-time updates instead of polling
-      const socket = getSocket()
-      if (!socket || !socket.connected) {
-        // Fallback to polling if WebSocket not available
-        console.warn('[MEDIA_SCANNER] WebSocket not available, falling back to polling')
-        const finalResult = await apiService.pollScanStatus(
-          scanId,
-          (currentStatus) => {
-            if (currentStatus === "PENDING") {
-              setScanProgress(20)
-            } else if (currentStatus === "PROCESSING") {
-              setScanProgress(60)
-            }
-          },
-          60,
-          2000
-        )
-
-        setScanProgress(100)
-        setStatus("complete")
-        setScanning(false)
-        setResult(finalResult)
-        if (onScanResult) {
-          onScanResult(finalResult)
-        }
-        return
-      }
-
-      // Subscribe to scan updates via WebSocket
+      // Dual Hybrid Tracking: Real-time WebSocket + fast polling safety net
       await new Promise<void>((resolve, reject) => {
         let timeoutId: NodeJS.Timeout | null = null
+        let pollInterval: NodeJS.Timeout | null = null
         let completed = false
+
+        const finishWithResult = (finalResult: any) => {
+          if (completed) return
+          completed = true
+          if (timeoutId) clearTimeout(timeoutId)
+          if (pollInterval) clearInterval(pollInterval)
+          unsubscribeFn()
+
+          setScanProgress(100)
+          setStatus("complete")
+          setScanning(false)
+          setResult(finalResult)
+          if (onScanResult) {
+            onScanResult(finalResult)
+          }
+          resolve()
+        }
+
+        const finishWithError = (errMessage: string) => {
+          if (completed) return
+          completed = true
+          if (timeoutId) clearTimeout(timeoutId)
+          if (pollInterval) clearInterval(pollInterval)
+          unsubscribeFn()
+
+          setStatus("error")
+          setScanning(false)
+          setError(errMessage)
+          reject(new Error(errMessage))
+        }
 
         const handleUpdate = (data: any) => {
           if (completed) return
@@ -209,58 +256,50 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
 
           if (data.type === 'progress') {
             setScanProgress(data.progress || 50)
-            if (data.stage) {
-              console.log('[MEDIA_SCANNER] Processing stage:', data.stage)
-            }
           } else if (data.type === 'complete') {
-            completed = true
-            if (timeoutId) clearTimeout(timeoutId)
-
-            // Fetch full scan result from API
             apiService.getScan(scanId).then((response) => {
               if (response.success && response.data) {
-                const finalResult = response.data
-                setScanProgress(100)
-                setStatus("complete")
-                setScanning(false)
-                setResult(finalResult)
-                if (onScanResult) {
-                  onScanResult(finalResult)
-                }
-                unsubscribeFn()
-                resolve()
-              } else {
-                unsubscribeFn()
-                reject(new Error('Failed to fetch scan result'))
+                finishWithResult(response.data)
               }
-            }).catch((err) => {
-              unsubscribeFn()
-              reject(err)
-            })
+            }).catch(() => {})
           } else if (data.type === 'failed') {
-            completed = true
-            if (timeoutId) clearTimeout(timeoutId)
-            setStatus("error")
-            setScanning(false)
-            setError(data.error?.message || "Scan failed")
-            unsubscribeFn()
-            reject(new Error(data.error?.message || "Scan failed"))
+            finishWithError(data.error?.message || "Scan failed")
           }
         }
 
-        // Subscribe to scan and get unsubscribe function
+        // Subscribe to scan via WebSocket
         const unsubscribeFn = subscribeToScan(scanId, handleUpdate)
 
-        // Set timeout fallback (5 minutes max wait)
-        timeoutId = setTimeout(() => {
+        // Immediate check & polling heartbeat:
+        // Catches fast scans that completed before WebSocket subscription
+        const checkStatus = async () => {
           if (completed) return
-          completed = true
-          unsubscribeFn()
-          setStatus("error")
-          setScanning(false)
-          setError("Scan timeout - please check scan status manually")
-          reject(new Error("Scan timeout"))
-        }, 5 * 60 * 1000)
+          try {
+            const resp = await apiService.getScan(scanId)
+            if (resp.success && resp.data) {
+              if (resp.data.status === 'COMPLETED') {
+                finishWithResult(resp.data)
+              } else if (resp.data.status === 'FAILED') {
+                finishWithError(resp.data.error || 'Scan processing failed')
+              } else if (resp.data.status === 'PROCESSING') {
+                setScanProgress((prev) => Math.max(prev, 60))
+              }
+            }
+          } catch {
+            // Ignore temporary network quirks during polling
+          }
+        }
+
+        // Check immediately after subscribe (fast-path for images)
+        checkStatus()
+
+        // Heartbeat poll every 1.5 seconds in parallel with WebSocket
+        pollInterval = setInterval(checkStatus, 1500)
+
+        // Timeout fallback (2 minutes)
+        timeoutId = setTimeout(() => {
+          finishWithError("Scan timeout - please refresh scan status")
+        }, 2 * 60 * 1000)
       })
     } catch (err) {
       console.error("Scan error:", err)
@@ -309,12 +348,35 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
     <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
       {/* Primary Scanner View */}
       <div className="xl:col-span-3 space-y-6">
-        <div className="relative aspect-video bg-black border border-primary/20 rounded-sm overflow-hidden group">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={!mediaPreview && status === "idle" ? handleUploadClick : undefined}
+          className={cn(
+            "relative aspect-video bg-black border rounded-sm overflow-hidden group transition-all",
+            isDragging
+              ? "border-primary ring-2 ring-primary/50 bg-primary/10 cursor-copy"
+              : !mediaPreview && status === "idle"
+              ? "border-primary/20 hover:border-primary/50 cursor-pointer"
+              : "border-primary/20"
+          )}
+        >
           {/* Corner Brackets */}
           <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-white/40 z-10" />
           <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-white/40 z-10" />
           <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-white/40 z-10" />
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-white/40 z-10" />
+
+          {/* Drag Overlay Feedback */}
+          {isDragging && (
+            <div className="absolute inset-0 bg-primary/20 backdrop-blur-xs z-20 flex flex-col items-center justify-center pointer-events-none">
+              <Upload className="w-12 h-12 text-primary animate-bounce mb-2" />
+              <p className="font-mono text-xs uppercase tracking-widest text-primary font-bold">
+                DROP_MEDIA_SIGNAL_TO_SCAN
+              </p>
+            </div>
+          )}
 
           {/* Media Display */}
           {mediaPreview && mediaType === "image" && (
@@ -348,10 +410,15 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
 
           {/* Default State */}
           {!mediaPreview && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                <Camera size={48} className="opacity-20" />
-                <p className="font-mono text-[10px] uppercase tracking-widest">Awaiting_Input_Signal...</p>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary/70 transition-colors">
+                <Camera size={48} className="opacity-20 group-hover:opacity-40 transition-opacity" />
+                <p className="font-mono text-[10px] uppercase tracking-widest font-semibold">
+                  {isDragging ? "DROP_MEDIA_SIGNAL_HERE" : "CLICK_OR_DRAG_MEDIA_TO_SCAN"}
+                </p>
+                <span className="text-[9px] font-mono text-muted-foreground/60 tracking-wider">
+                  MP4 · MOV · WEBM · MKV · JPG · PNG · WEBP · HEIC · WAV · MP3 · M4A
+                </span>
               </div>
             </div>
           )}
@@ -455,7 +522,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
             <input
               ref={fileInputRef}
               type="file"
-              accept="video/*,audio/*,image/*"
+              accept="video/*,audio/*,image/*,.mp4,.mov,.avi,.webm,.mkv,.m4v,.3gp,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.heic,.heif,.wav,.mp3,.m4a,.aac,.flac,.ogg"
               onChange={handleFileSelect}
               className="hidden"
               disabled={status !== "idle"}

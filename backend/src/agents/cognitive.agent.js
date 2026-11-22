@@ -47,9 +47,9 @@ const calculateDynamicThresholds = async (perceptionData, detectionResults) => {
   }
 
   // Adjust for media type
-  if (perceptionData.mediaType === 'IMAGE') {
-    deepfakeThreshold -= adj.imageDecrease;
-  } else if (perceptionData.mediaType === 'VIDEO' && detectionResults.frameCount > 10) {
+  // For images, single frames lack temporal continuity, so we maintain a robust threshold
+  // rather than lowering it, preventing compression-induced false positives.
+  if (perceptionData.mediaType === 'VIDEO' && detectionResults.frameCount > 10) {
     deepfakeThreshold -= adj.multiFrameDecrease;
   }
 
@@ -78,27 +78,46 @@ const generateRichExplanations = (detectionResults, perceptionData) => {
   const peakRisk = detectionResults.peakRisk || 0;
   const meanRisk = detectionResults.meanRisk || 0;
 
+  const facesDetected = detectionResults.facesDetected ?? detectionResults.faces_detected ?? 1;
+
+  // Zero-face explanation
+  if (facesDetected === 0 && perceptionData.mediaType !== 'AUDIO') {
+    explanations.push({
+      type: 'info',
+      message: 'No human face detected in visual content',
+      confidence: 'high',
+      details: 'Facial authenticity verification requires a detectable human face. Non-facial content verified as authentic/inconclusive.'
+    });
+  }
+
   // Video/Image analysis
+  const isImg = perceptionData.mediaType === 'IMAGE';
   if (videoScore > 75) {
     explanations.push({
       type: 'critical',
-      message: 'Strong facial manipulation indicators detected',
+      message: isImg ? 'Strong AI synthetic / deepfake indicators detected' : 'Strong facial manipulation indicators detected',
       confidence: 'high',
-      details: `Model detected ${Math.round(videoScore)}% probability of synthetic facial features (P90)`
+      details: isImg
+        ? `Model detected ${Math.round(videoScore)}% probability of AI synthetic generation or facial manipulation`
+        : `Model detected ${Math.round(videoScore)}% probability of synthetic facial features (P90)`
     });
-  } else if (videoScore > 60) {
+  } else if (videoScore > 55) {
     explanations.push({
       type: 'warning',
-      message: 'Significant facial inconsistencies observed',
+      message: isImg ? 'Significant AI-generated content signatures observed' : 'Significant facial inconsistencies observed',
       confidence: 'medium',
-      details: 'Biometric analysis shows anomalies in facial structure or expression'
+      details: isImg
+        ? `Visual analysis detected ${Math.round(videoScore)}% probability of synthetic or generative AI patterns`
+        : 'Biometric analysis shows anomalies in facial structure or expression'
     });
-  } else if (videoScore > 40) {
+  } else if (videoScore > 35) {
     explanations.push({
       type: 'info',
-      message: 'Minor facial analysis discrepancies noted',
+      message: isImg ? 'Potential synthetic anomalies noted' : 'Minor facial analysis discrepancies noted',
       confidence: 'low',
-      details: 'Some facial features show slight irregularities'
+      details: isImg
+        ? 'Some visual patterns show generative irregularities'
+        : 'Some facial features show slight irregularities'
     });
   }
 
@@ -259,7 +278,13 @@ export const generateExplanations = async (detectionResults, perceptionData) => 
     let verdict;
     let verdictConfidence;
 
-    if (riskScore >= thresholds.deepfakeThreshold) {
+    const facesDetected = detectionResults.facesDetected ?? detectionResults.faces_detected ?? 1;
+
+    // Zero-face safeguard: if no human faces detected on video media and no audio deepfake:
+    if (facesDetected === 0 && perceptionData.mediaType === 'VIDEO' && (!detectionResults.audioScore || detectionResults.audioScore < 50)) {
+      verdict = 'AUTHENTIC';
+      verdictConfidence = 95;
+    } else if (riskScore >= thresholds.deepfakeThreshold) {
       verdict = 'DEEPFAKE';
       verdictConfidence = confidence;
     } else if (riskScore >= thresholds.suspiciousThreshold) {

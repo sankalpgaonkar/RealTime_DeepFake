@@ -537,13 +537,14 @@ export const processBatchUpload = async (files, userId, operativeId, batchId = n
         const fileBuffer = fs.readFileSync(file.path);
         const fileHash = generateFileHash(fileBuffer);
 
-        // Determine media type
+        // Determine media type with extension fallback
+        const ext = path.extname(file.originalname || file.path || '').toLowerCase();
         let mediaType = 'UNKNOWN';
-        if (file.mimetype.startsWith('video/')) {
+        if ((file.mimetype && file.mimetype.startsWith('video/')) || ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp', '.flv', '.wmv'].includes(ext)) {
           mediaType = 'VIDEO';
-        } else if (file.mimetype.startsWith('audio/')) {
+        } else if ((file.mimetype && file.mimetype.startsWith('audio/')) || ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma', '.opus'].includes(ext)) {
           mediaType = 'AUDIO';
-        } else if (file.mimetype.startsWith('image/')) {
+        } else if ((file.mimetype && file.mimetype.startsWith('image/')) || ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif', '.heic', '.heif'].includes(ext)) {
           mediaType = 'IMAGE';
         }
 

@@ -1,5 +1,5 @@
 -- ================================================
--- SENTINEL VIVA COMMANDS  |  UCS310  |  Ms. Chinu Dhir
+-- VERITRACE VIVA COMMANDS  |  UCS310  |  Ms. Chinu Dhir
 -- Connect: sudo mariadb -u root sentinel_db
 -- ================================================
 

@@ -11,21 +11,21 @@ import logger from '../src/utils/logger.js';
 
 const USERS_CONFIG = [
   {
-    name: 'Harshdeep Athawale',
+    name: 'Sankalp Gaonkar',
     email: 'harshdeepathawale27@gmail.com',
     role: ROLES.ADMIN,
     operativeId: 'ADMIN_001',
     password: 'Password@123',
   },
   {
-    name: 'Harshdeep Athawale',
+    name: 'Sankalp Gaonkar',
     email: 'harshdeepathawale777@gmail.com',
     role: ROLES.OPERATIVE,
     operativeId: 'OP_001',
     password: 'Password@123',
   },
   {
-    name: 'Harshdeep Athawale',
+    name: 'Sankalp Gaonkar',
     email: 'hathawale_be24@thapar.edu',
     role: ROLES.ANALYST,
     operativeId: 'AN_001',

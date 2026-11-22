@@ -109,28 +109,39 @@ const startServer = async () => {
     const httpServer = createServer(app);
 
     // Initialize Socket.IO
-    const allowedOrigins = config.frontend.url 
-      ? [config.frontend.url]
-      : [
-          'http://localhost:3000',
-          'http://localhost:3001',
-          'http://localhost:3002',
-          'http://localhost:3003',
-          'http://localhost:3004',
-          'http://localhost:3005',
-        ];
+    const defaultAllowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+      'http://localhost:3004',
+      'http://localhost:3005',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:3002',
+      'http://127.0.0.1:3003',
+      'http://127.0.0.1:3004',
+      'http://127.0.0.1:3005',
+    ];
+
+    const allowedOrigins = new Set([
+      ...(config.frontend.url ? [config.frontend.url] : []),
+      ...defaultAllowedOrigins,
+    ]);
 
     const io = new Server(httpServer, {
       cors: {
         origin: (origin, callback) => {
           if (!origin) return callback(null, true);
-          if (allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-          } else if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
+          if (
+            allowedOrigins.has(origin) ||
+            origin.includes('localhost') ||
+            origin.includes('127.0.0.1') ||
+            process.env.NODE_ENV === 'development'
+          ) {
+            return callback(null, true);
           }
+          callback(new Error('Not allowed by CORS'));
         },
         credentials: true,
         methods: ['GET', 'POST'],
@@ -175,13 +186,19 @@ const startServer = async () => {
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   logger.error('Unhandled Promise Rejection:', err);
-  process.exit(1);
+  // Do not crash server in development on transient promise rejections
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught Exception:', err);
-  process.exit(1);
+  // Log and exit safely if it is a truly unrecoverable fatal error
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
 
 // Start the server

@@ -1,6 +1,6 @@
-# Contributing to SENTINEL Deepfake Detection System
+# Contributing to VERITRACE Deepfake Detection System
 
-Thank you for your interest in contributing to SENTINEL! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to VERITRACE! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -46,14 +46,14 @@ Before contributing, ensure you have:
 2. Clone your fork locally:
 
 ```bash
-git clone https://github.com/your-username/deepfake-detection-system.git
-cd deepfake-detection-system
+git clone https://github.com/your-username/RealTime_DeepFake.git
+cd RealTime_DeepFake
 ```
 
 3. Add the upstream remote:
 
 ```bash
-git remote add upstream https://github.com/original-org/deepfake-detection-system.git
+git remote add upstream https://github.com/original-org/RealTime_DeepFake.git
 ```
 
 ---
@@ -126,7 +126,7 @@ The ML service will be available at `http://localhost:5000`
 ## Project Structure
 
 ```
-deepfake-detection-system/
+RealTime_DeepFake/
 ├── app/                    # Next.js pages (App Router)
 ├── backend/                # Express.js backend
 │   └── src/
@@ -481,7 +481,7 @@ ls -la ml-service/efficientnet_b0_ffpp_c23/
 
 ## Getting Help
 
-- Check existing [issues](https://github.com/your-org/deepfake-detection-system/issues)
+- Check existing [issues](https://github.com/your-org/RealTime_DeepFake/issues)
 - Read the [documentation](docs/)
 - Ask questions in discussions
 
@@ -494,4 +494,4 @@ Contributors will be recognized in:
 - Release notes for significant contributions
 - README acknowledgments for major features
 
-Thank you for contributing to SENTINEL!
+Thank you for contributing to VERITRACE!

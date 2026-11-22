@@ -11,16 +11,20 @@ cd "$DIR"
 mkdir -p logs backend/logs backend/uploads
 
 echo "=========================================="
-echo "  Starting SENTINEL-X System (Native)"
+echo "  Starting VERITRACE-X System (Native)"
 echo "=========================================="
 
 # 1. Check/Start MongoDB
 echo "[1/5] Checking MongoDB..."
-if ! nc -z 127.0.0.1 27017 >/dev/null 2>&1; then
-    echo "Starting MongoDB..."
+if grep -q "mongodb+srv://" backend/.env 2>/dev/null; then
+    echo "✓ Configured with cloud MongoDB Atlas cluster"
+elif ! nc -z 127.0.0.1 27017 >/dev/null 2>&1; then
+    echo "Starting local MongoDB..."
     mongod --config /opt/homebrew/etc/mongod.conf --fork || true
+    echo "✓ Local MongoDB is running on port 27017"
+else
+    echo "✓ Local MongoDB is running on port 27017"
 fi
-echo "✓ MongoDB is running on port 27017"
 
 # 2. Check/Start Redis
 echo "[2/5] Checking Redis..."

@@ -32,7 +32,7 @@ const config = {
   upload: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '500000000', 10), // 500MB
     uploadPath: process.env.UPLOAD_PATH || './uploads',
-    allowedMimeTypes: (process.env.ALLOWED_MIME_TYPES || 'video/mp4,video/avi,video/mov,video/webm,audio/mpeg,audio/wav,audio/mp3,image/jpeg,image/png').split(','),
+    allowedMimeTypes: (process.env.ALLOWED_MIME_TYPES || 'video/mp4,video/quicktime,video/avi,video/x-msvideo,video/msvideo,video/webm,video/x-matroska,video/mkv,video/x-m4v,video/3gpp,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave,audio/x-pn-wav,audio/aac,audio/x-m4a,audio/mp4,audio/m4a,audio/ogg,audio/flac,audio/webm,image/jpeg,image/jpg,image/pjpeg,image/png,image/x-png,image/webp,image/gif,image/bmp,image/tiff,image/heic,image/heif').split(',').map(t => t.trim()),
   },
   security: {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
@@ -65,7 +65,7 @@ const config = {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
   ml: {
-    serviceUrl: process.env.ML_SERVICE_URL || 'http://localhost:5000',
+    serviceUrl: process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001',
     enabled: process.env.ML_SERVICE_ENABLED !== 'false',
     timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10),
     retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
@@ -79,7 +79,7 @@ const config = {
       user: process.env.SMTP_USER || '',
       password: process.env.SMTP_PASSWORD || '',
     },
-    from: process.env.EMAIL_FROM || 'noreply@sentinel-x.com',
+    from: process.env.EMAIL_FROM || 'noreply@VERITRACE-x.com',
   },
 };
 

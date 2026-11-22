@@ -1,5 +1,5 @@
 -- =============================================================================
--- SENTINEL: Deepfake Detection & Authenticity Verification System
+-- VERITRACE: Deepfake Detection & Authenticity Verification System
 -- UCS310 - Database Management System
 -- File: 08_transactions.sql  |  Transaction Management — COMMIT/ROLLBACK/SAVEPOINT
 -- =============================================================================
@@ -14,7 +14,7 @@ DELETE FROM Scans WHERE FileHash IN (
     'concurrent112233aabbccddeeff00112233445566778899aabbccddeeff0011'
 );
 DELETE FROM EvidenceVault WHERE FilePath LIKE '%additional_frame%' OR SHA256Hash LIKE 'txn3%';
-DELETE FROM Users WHERE Email = 'test.operative@sentinel.io';
+DELETE FROM Users WHERE Email = 'test.operative@VERITRACE.io';
 
 -- =============================================================================
 -- TRANSACTION SCENARIO 1: Full scan submission workflow
@@ -184,7 +184,7 @@ START TRANSACTION;
     INSERT INTO Users (Name, Email, Role, PasswordHash, OperativeID)
     VALUES (
         'Test Operative',
-        'test.operative@sentinel.io',
+        'test.operative@VERITRACE.io',
         'operative',
         '$2b$12$samplehash_test_operative_txn5',
         'OPR-FIELD-006'
@@ -204,7 +204,7 @@ START TRANSACTION;
     VALUES (
         @new_user_id,
         'system',
-        'Welcome to SENTINEL. Your operative account is now active.'
+        'Welcome to VERITRACE. Your operative account is now active.'
     );
 
 COMMIT;
@@ -212,7 +212,7 @@ COMMIT;
 -- Verify the transaction result
 SELECT u.Name, u.Email, u.Role, u.OperativeID
 FROM Users u
-WHERE u.Email = 'test.operative@sentinel.io';
+WHERE u.Email = 'test.operative@VERITRACE.io';
 
 
 -- =============================================================================
@@ -221,7 +221,7 @@ WHERE u.Email = 'test.operative@sentinel.io';
 -- =============================================================================
 /*
 DELETE FROM Scans WHERE FileHash LIKE 'txn%' OR FileHash LIKE 'concurrent%';
-DELETE FROM Users WHERE Email = 'test.operative@sentinel.io';
+DELETE FROM Users WHERE Email = 'test.operative@VERITRACE.io';
 DELETE FROM EvidenceVault WHERE FilePath LIKE '%additional_frame%' OR FilePath LIKE '%txn3%';
 */
 

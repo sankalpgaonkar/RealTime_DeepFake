@@ -57,7 +57,7 @@ export const sendEmailNotification = async (user, notification) => {
   }
 
   try {
-    const subject = `[SENTINEL-X] ${notification.title}`;
+    const subject = `[VERITRACE-X] ${notification.title}`;
     const html = `
       <!DOCTYPE html>
       <html>
@@ -78,7 +78,7 @@ export const sendEmailNotification = async (user, notification) => {
         <body>
           <div class="container">
             <div class="header">
-              <h1>SENTINEL-X</h1>
+              <h1>VERITRACE-X</h1>
               <p>Deepfake Detection System</p>
             </div>
             <div class="content priority-${notification.priority || 'medium'}">
@@ -87,7 +87,7 @@ export const sendEmailNotification = async (user, notification) => {
               ${notification.data ? `<pre style="background: #fff; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(notification.data, null, 2)}</pre>` : ''}
             </div>
             <div class="footer">
-              <p>This is an automated notification from SENTINEL-X</p>
+              <p>This is an automated notification from VERITRACE-X</p>
               <p>You can manage your notification preferences in your account settings.</p>
             </div>
           </div>
@@ -96,19 +96,19 @@ export const sendEmailNotification = async (user, notification) => {
     `;
 
     const text = `
-SENTINEL-X - ${notification.title}
+VERITRACE-X - ${notification.title}
 
 ${notification.message}
 
 ${notification.data ? JSON.stringify(notification.data, null, 2) : ''}
 
 ---
-This is an automated notification from SENTINEL-X
+This is an automated notification from VERITRACE-X
 You can manage your notification preferences in your account settings.
     `;
 
     await transporter.sendMail({
-      from: config.email.from || 'noreply@sentinel-x.com',
+      from: config.email.from || 'noreply@VERITRACE-x.com',
       to: user.email,
       subject,
       text,

@@ -1,4 +1,4 @@
-# SENTINEL - Deepfake Detection & Authenticity Verification System
+# VERITRACE - Deepfake Detection & Authenticity Verification System
 
 A full-stack AI-powered platform for detecting deepfake media using machine learning and agentic AI orchestration. Detects AI-generated or manipulated content in images, videos, and audio with confidence scores and forensic analysis.
 
@@ -57,8 +57,8 @@ A full-stack AI-powered platform for detecting deepfake media using machine lear
 
 ### Docker (Recommended)
 ```bash
-git clone https://github.com/HarshdeepAthawale/Deepfake-Detection-Authenticity-Verification-System.git
-cd Deepfake-Detection-Authenticity-Verification-System
+git clone https://github.com/sankalpgaonkar/RealTime_DeepFake.git
+cd RealTime_DeepFake
 
 docker-compose up -d
 
@@ -110,7 +110,7 @@ pip install -r requirements.txt && python app.py
 ## Project Structure
 
 ```
-deepfake-detection-system/
+RealTime_DeepFake/
 ├── app/                    # Next.js pages
 ├── backend/src/            # Express backend
 │   ├── agents/            # 4-Agent pipeline
@@ -129,5 +129,5 @@ Proprietary. All rights reserved. See LICENSE for details.
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/HarshdeepAthawale/Deepfake-Detection-Authenticity-Verification-System/issues)
+- **Issues**: [GitHub Issues](https://github.com/sankalpgaonkar/RealTime_DeepFake/issues)
 - **Documentation**: [docs/](docs/)

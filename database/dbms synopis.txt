@@ -2,14 +2,14 @@
 
 ---
 
-## 🛡️ SENTINEL – Deepfake Detection & Authenticity Verification System
+## 🛡️ VERITRACE – Deepfake Detection & Authenticity Verification System
 ### DBMS Project Explanation (UCS310)
 
 ---
 
 ### 1. Problem & Idea
 
-Aaj ke time pe AI se fake videos, images aur audio banana bahut aasan ho gaya hai (deepfakes). Inhe track karna aur verify karna ek bada problem hai. SENTINEL ek **centralized database system** hai jo deepfake detection ke results ko store aur manage karta hai — users, scans, verdicts, audit logs sab kuch ek jagah.
+Aaj ke time pe AI se fake videos, images aur audio banana bahut aasan ho gaya hai (deepfakes). Inhe track karna aur verify karna ek bada problem hai. VERITRACE ek **centralized database system** hai jo deepfake detection ke results ko store aur manage karta hai — users, scans, verdicts, audit logs sab kuch ek jagah.
 
 ML/frontend humara scope nahi hai — sirf **backend database** implement karna hai (pure DBMS project).
 

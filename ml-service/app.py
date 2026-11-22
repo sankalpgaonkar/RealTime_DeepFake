@@ -14,6 +14,7 @@ This service:
 import os
 import time
 import numpy as np
+from PIL import Image
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import logging
@@ -27,7 +28,7 @@ from model_loader import (
 )
 from trainer import start_training, get_training_status
 from dataset_builder import get_dataset_stats
-from preprocessing import preprocess_image, preprocess_frames
+from preprocessing import preprocess_image, preprocess_image_multiscale, preprocess_frames
 from audio_preprocessing import preprocess_audio, is_audio_processing_available
 
 app = Flask(__name__)
@@ -61,6 +62,25 @@ INFERENCE_CONFIG = {
     'peak_blend_fraction': float(os.environ.get('ML_PEAK_BLEND_FRACTION', '0.30')),
     'peak_blend_gap':      float(os.environ.get('ML_PEAK_BLEND_GAP',      '10.0')),
 }
+
+
+def resolve_file_path(p):
+    """Resolve file path across native and docker environments."""
+    if not p or not isinstance(p, str):
+        return p
+    if os.path.exists(p):
+        return os.path.abspath(p)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, '..', p),
+        os.path.join(base_dir, '..', 'backend', p),
+        os.path.join(base_dir, '..', 'backend', 'uploads', os.path.basename(p)),
+        os.path.join(base_dir, 'uploads', os.path.basename(p)),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return p
 
 
 def load_model_on_startup():
@@ -310,7 +330,7 @@ def compute_gan_fingerprint(fake_probs, video_score):
     return round(max(0.0, min(100.0, blended)), 2)
 
 
-def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, audio_fake_prob=None):
+def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, audio_fake_prob=None, image_full_prob=None, image_crop_probs=None):
     """
     Calculate detection scores from model predictions
 
@@ -320,11 +340,51 @@ def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, au
         frame_count: Number of frames processed
         faces_detected: Number of frames with detected faces
         audio_fake_prob: Audio fake probability (0-1) or None if not available
+        image_full_prob: Full image fake probability for IMAGE media type
+        image_crop_probs: Multi-scale facial crops fake probabilities for IMAGE media type
 
     Returns:
         Dictionary of calculated scores
     """
     try:
+        # Specialized Dual-Signal Pipeline for Single IMAGE
+        if media_type == 'IMAGE':
+            fake_probs_arr = np.array(fake_probs) if len(fake_probs) > 0 else np.array([])
+            if image_crop_probs is not None and len(image_crop_probs) > 0:
+                crops_p90 = float(np.percentile(image_crop_probs, 90) * 100)
+                full_s = float(image_full_prob * 100) if image_full_prob is not None else crops_p90
+                # Dual-Signal Architecture:
+                # 1. Face-Swap deepfake: crops_p90 is elevated (manipulation localized to face).
+                # 2. Whole-image generative AI portrait (Midjourney, DALL-E, SD, Flux): full_s is elevated (synthetic diffusion patterns across frame).
+                # 3. Authentic camera portrait: both crops_p90 and full_s are low (< 25%).
+                video_score = max(crops_p90, full_s)
+            elif len(fake_probs_arr) > 0:
+                video_score = float(fake_probs_arr[0] * 100)
+            else:
+                video_score = 0.0
+
+            peak_risk = float(np.max(fake_probs_arr) * 100) if len(fake_probs_arr) > 0 else video_score
+            mean_risk = float(np.mean(fake_probs_arr) * 100) if len(fake_probs_arr) > 0 else video_score
+            risk_score = video_score
+            gan_fingerprint = float(video_score)
+            temporal_consistency = 100.0
+            confidence = float(np.mean([abs(p - 0.5) * 2 for p in fake_probs_arr]) * 100) if len(fake_probs_arr) > 0 else 0.0
+
+            logger.info(f'[ML_SERVICE] Image Scores: Composite={video_score:.2f}, Peak={peak_risk:.2f}, Risk={risk_score:.2f}, Confidence={confidence:.2f}')
+
+            return {
+                'video_score': round(video_score, 2),
+                'peak_risk': round(peak_risk, 2),
+                'mean_risk': round(mean_risk, 2),
+                'audio_score': 0.0,
+                'gan_fingerprint': round(gan_fingerprint, 2),
+                'temporal_consistency': 100.0,
+                'risk_score': round(risk_score, 2),
+                'confidence': round(confidence, 2),
+                'faces_detected': faces_detected,
+                'total_frames': frame_count
+            }
+
         fake_probs = np.array(fake_probs) if len(fake_probs) > 0 else np.array([])
 
         if len(fake_probs) > 0:
@@ -401,28 +461,51 @@ def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, au
                 confidence = confidence * (1.0 - confidence_penalty)
                 logger.info(f'[ML_SERVICE] Confidence adjusted: {original_confidence:.2f}% → {confidence:.2f}%')
 
-        # Calculate combined risk score — weights from INFERENCE_CONFIG
-        v_w = INFERENCE_CONFIG['video_weight']
-        a_w = INFERENCE_CONFIG['audio_weight']
-
-        if media_type == 'VIDEO' and audio_score > 0:
-            # VIDEO with audio: weighted combination, but take max to catch partial deepfakes
-            weighted_score = (video_score * v_w) + (audio_score * a_w)
-            risk_score = max(weighted_score, video_score, audio_score * (a_w + 0.5))
-            logger.info(f'[ML_SERVICE] Combined video+audio risk: weighted={weighted_score:.2f}, final={risk_score:.2f}')
-        elif media_type == 'AUDIO':
-            # AUDIO only: use audio score directly
-            risk_score = audio_score
+        # Zero-face guardrail:
+        # If no faces were detected in video media, facial deepfake models cannot perform analysis.
+        # Spurious background patches must never be classified as deepfakes.
+        if media_type == 'VIDEO' and faces_detected == 0:
+            logger.warning('[ML_SERVICE] Zero faces detected in video. Suppressing facial risk score.')
+            video_score = 0.0
+            peak_risk = 0.0
+            mean_risk = 0.0
+            gan_fingerprint = 0.0
+            temporal_consistency = 100.0
+            if media_type == 'VIDEO' and audio_fake_prob is not None:
+                audio_score = float(audio_fake_prob * 100)
+                risk_score = audio_score
+                confidence = float(abs(audio_fake_prob - 0.5) * 2 * 100)
+            else:
+                risk_score = 0.0
+                confidence = 0.0
         else:
-            # VIDEO/IMAGE without audio: use video score
-            risk_score = video_score
+            # Calculate combined risk score — weights from INFERENCE_CONFIG
+            v_w = INFERENCE_CONFIG['video_weight']
+            a_w = INFERENCE_CONFIG['audio_weight']
 
-        # If the peak is significantly above the current risk score, blend it in
-        # (catches localized deepfake segments that the P90 metric may underweight)
-        peak_gap = INFERENCE_CONFIG['peak_blend_gap']
-        peak_fraction = INFERENCE_CONFIG['peak_blend_fraction']
-        if peak_risk > risk_score + peak_gap:
-            risk_score = risk_score * (1.0 - peak_fraction) + peak_risk * peak_fraction
+            if media_type == 'VIDEO' and audio_score > 0:
+                # VIDEO with audio: weighted combination.
+                # Only escalate if visual media also shows suspicion (video_score >= 40);
+                # pristine facial video (video_score < 30) avoids false positives from noisy audio.
+                weighted_score = (video_score * v_w) + (audio_score * a_w)
+                if audio_score >= 80 and video_score >= 40:
+                    risk_score = max(weighted_score, audio_score * 0.8)
+                else:
+                    risk_score = weighted_score
+                logger.info(f'[ML_SERVICE] Combined video+audio risk: weighted={weighted_score:.2f}, final={risk_score:.2f}')
+            elif media_type == 'AUDIO':
+                # AUDIO only: use audio score directly
+                risk_score = audio_score
+            else:
+                # VIDEO/IMAGE without audio: use video score
+                risk_score = video_score
+
+            # If the peak is significantly above the current risk score, blend it in
+            # (catches localized deepfake segments that the P90 metric may underweight)
+            peak_gap = INFERENCE_CONFIG['peak_blend_gap']
+            peak_fraction = INFERENCE_CONFIG['peak_blend_fraction']
+            if peak_risk > risk_score + peak_gap:
+                risk_score = risk_score * (1.0 - peak_fraction) + peak_risk * peak_fraction
 
         risk_score = min(100, max(0, risk_score))
 
@@ -444,6 +527,32 @@ def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, au
     except Exception as e:
         logger.error(f'[ML_SERVICE] Score calculation error: {str(e)}', exc_info=True)
         raise
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Root status and service info endpoint"""
+    model_info = get_model_info()
+    return jsonify({
+        'status': 'healthy' if _model_loaded else 'unhealthy',
+        'service': 'deepfake-detection-ml-service',
+        'version': '4.1.0',
+        'message': 'Deepfake Detection ML Inference Service is running',
+        'endpoints': {
+            'root': '/',
+            'health': '/health',
+            'inference': '/api/v1/inference (POST)',
+            'training_status': '/api/v1/training/status (GET)',
+            'retrain': '/api/v1/retrain (POST)',
+        },
+        'models': {
+            'image': model_info.get('model'),
+            'image_accuracy': model_info.get('accuracy'),
+            'audio': model_info.get('audio_model'),
+            'audio_accuracy': model_info.get('audio_accuracy'),
+        },
+        'timestamp': datetime.utcnow().isoformat()
+    }), 200
 
 
 @app.route('/health', methods=['GET'])
@@ -521,22 +630,43 @@ def inference():
                 raise ValueError('No frame paths provided for IMAGE')
 
             # Process first frame as image
-            image_path = extracted_frames[0] if isinstance(extracted_frames, list) else extracted_frames
+            raw_path = extracted_frames[0] if isinstance(extracted_frames, list) else extracted_frames
+            image_path = resolve_file_path(raw_path)
             
             # Validate path exists
             if not os.path.exists(image_path):
                 raise ValueError(f'Image file not found: {image_path}')
             
-            image, face_found = preprocess_image(image_path, return_face_info=True)
+            # Multi-scale face crop ensemble (10% tight, 25% medium, 50% broad context)
+            # Evaluates inner biometrics, facial perimeter seams, and diffusion boundaries
+            crops, face_found = preprocess_image_multiscale(image_path, paddings=(10, 25, 50))
             total_frames = 1
             faces_detected = 1 if face_found else 0
 
-            if not face_found:
-                logger.warning(f'[ML_SERVICE] No face detected in image - results may be less accurate')
+            # Whole-image evaluation: evaluates global diffusion patterns, background rendering, and generative textures
+            full_pil = Image.open(image_path).convert('RGB')
+            eval_images = [full_pil]
+            if face_found and crops:
+                eval_images.extend(crops)
 
-            # Run inference
-            fake_probs, results = run_inference(pipeline, image)
-            scores = calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=faces_detected)
+            # Run inference across full image + multi-scale face crops
+            fake_probs, results = run_inference(pipeline, eval_images)
+            full_fake_prob = fake_probs[0]
+            crop_fake_probs = fake_probs[1:] if len(fake_probs) > 1 else []
+
+            logger.info(
+                f'[ML_SERVICE] Image inference: full_img={full_fake_prob*100:.1f}%, '
+                f'crops={[f"{p*100:.1f}%" for p in crop_fake_probs]}, face_found={face_found}'
+            )
+
+            scores = calculate_scores(
+                fake_probs=fake_probs,
+                media_type=media_type,
+                frame_count=1,
+                faces_detected=faces_detected,
+                image_full_prob=full_fake_prob,
+                image_crop_probs=crop_fake_probs
+            )
 
         elif media_type == 'VIDEO':
             if not extracted_frames:
@@ -545,8 +675,9 @@ def inference():
             # Validate frame paths exist
             valid_paths = []
             for frame_path in extracted_frames:
-                if os.path.exists(frame_path):
-                    valid_paths.append(frame_path)
+                resolved_frame = resolve_file_path(frame_path)
+                if os.path.exists(resolved_frame):
+                    valid_paths.append(resolved_frame)
                 else:
                     logger.warning(f'[ML_SERVICE] Frame file not found: {frame_path}')
 
@@ -575,11 +706,12 @@ def inference():
 
             # Process audio if available
             audio_fake_prob = None
-            if extracted_audio and os.path.exists(extracted_audio):
-                logger.info(f'[ML_SERVICE] Processing audio track: {extracted_audio}')
+            resolved_audio = resolve_file_path(extracted_audio) if extracted_audio else None
+            if resolved_audio and os.path.exists(resolved_audio):
+                logger.info(f'[ML_SERVICE] Processing audio track: {resolved_audio}')
 
                 if is_audio_model_loaded() and is_audio_processing_available():
-                    audio_data = preprocess_audio(extracted_audio)
+                    audio_data = preprocess_audio(resolved_audio)
                     if audio_data['valid']:
                         audio_fake_prob, audio_raw = run_audio_inference(audio_data)
                         if audio_fake_prob is not None:
@@ -616,6 +748,7 @@ def inference():
                 # For direct audio uploads, the path might be in extractedFrames
                 audio_path = extracted_frames[0] if isinstance(extracted_frames, list) else extracted_frames
 
+            audio_path = resolve_file_path(audio_path) if audio_path else None
             if not audio_path or not os.path.exists(audio_path):
                 raise ValueError('No valid audio file provided')
 
@@ -658,8 +791,8 @@ def inference():
         }
 
         # Add warning if no faces detected
-        if faces_detected == 0:
-            response['warning'] = 'No faces detected - results may be less accurate'
+        if faces_detected == 0 and media_type != 'AUDIO':
+            response['warning'] = 'No human faces detected. Facial authenticity verification requires a clearly visible face.'
 
         logger.info(f'[ML_SERVICE] Inference complete: risk_score={response["risk_score"]}, confidence={response["confidence"]}, faces={faces_detected}/{total_frames}, time={inference_time}ms')
 

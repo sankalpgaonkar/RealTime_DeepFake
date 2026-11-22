@@ -49,12 +49,37 @@ const storage = multer.diskStorage({
   },
 });
 
+// Known supported media extensions
+const ALLOWED_EXTENSIONS = new Set([
+  // Video formats
+  '.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp', '.flv', '.wmv',
+  // Image formats
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif', '.heic', '.heif',
+  // Audio formats
+  '.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma', '.opus'
+]);
+
 const fileFilter = (req, file, cb) => {
-  if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`Invalid file type. Allowed types: ${config.upload.allowedMimeTypes.join(', ')}`), false);
+  const mime = (file.mimetype || '').toLowerCase();
+  const ext = path.extname(file.originalname || '').toLowerCase();
+
+  // 1. Check if MIME is explicitly in allowed list
+  if (config.upload.allowedMimeTypes.includes(mime)) {
+    return cb(null, true);
   }
+
+  // 2. Accept standard media prefixes (video/*, audio/*, image/*)
+  if (mime.startsWith('video/') || mime.startsWith('audio/') || mime.startsWith('image/')) {
+    return cb(null, true);
+  }
+
+  // 3. Fallback to extension matching (handles application/octet-stream, quicktime, etc.)
+  if (ALLOWED_EXTENSIONS.has(ext)) {
+    return cb(null, true);
+  }
+
+  logger.warn(`[UPLOAD] Rejected unsupported file: name=${file.originalname}, mime=${file.mimetype}`);
+  cb(new Error(`Invalid file type (${file.mimetype || ext || 'unknown'}). Supported media formats: Video (.mp4, .mov, .avi, .webm, .mkv), Image (.jpg, .png, .webp, .heic), Audio (.wav, .mp3, .m4a, .aac).`), false);
 };
 
 export const upload = multer({
@@ -95,13 +120,14 @@ export const uploadScan = async (req, res) => {
     const fileBuffer = fs.readFileSync(file.path);
     const fileHash = generateFileHash(fileBuffer);
 
-    // Determine media type from mime type
+    // Determine media type from mime type or file extension
+    const ext = path.extname(file.originalname || '').toLowerCase();
     let mediaType = 'UNKNOWN';
-    if (file.mimetype.startsWith('video/')) {
+    if (file.mimetype.startsWith('video/') || ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v', '.3gp', '.flv', '.wmv'].includes(ext)) {
       mediaType = 'VIDEO';
-    } else if (file.mimetype.startsWith('audio/')) {
+    } else if (file.mimetype.startsWith('audio/') || ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma', '.opus'].includes(ext)) {
       mediaType = 'AUDIO';
-    } else if (file.mimetype.startsWith('image/')) {
+    } else if (file.mimetype.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif', '.heic', '.heif'].includes(ext)) {
       mediaType = 'IMAGE';
     }
 

@@ -1,5 +1,5 @@
 /**
- * Sentinel Agentic API Service Layer
+ * VERITRACE Agentic API Service Layer
  * Handles communication between the frontend and the Agentic Backend.
  */
 
@@ -28,6 +28,7 @@ export interface ScanResult {
     meanRisk?: number
   }
   status?: string
+  error?: string
   mediaType?: string
   fileName?: string
   hash?: string

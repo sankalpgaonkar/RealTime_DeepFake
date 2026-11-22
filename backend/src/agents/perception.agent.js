@@ -22,6 +22,7 @@ const __dirname = path.dirname(__filename);
  */
 export const processMedia = async (filePath, scanId) => {
   try {
+    const absoluteFilePath = path.resolve(filePath);
     logger.info(`[PERCEPTION_AGENT] Starting perception processing for scan: ${scanId}`);
 
     // Read file buffer for hashing
@@ -153,15 +154,19 @@ export const processMedia = async (filePath, scanId) => {
           frames = await extractFrames(filePath, framesDir, frameRate, maxFrames);
         }
 
-        perceptionResults.extractedFrames = frames;
-        perceptionResults.maxFrames = frames.length; // tell ML service exactly how many frames we extracted
-        logger.info(`[PERCEPTION_AGENT] Extracted ${frames.length} frames`);
+        perceptionResults.extractedFrames = (frames || []).map(f => path.resolve(f));
+        perceptionResults.maxFrames = (frames || []).length; // tell ML service exactly how many frames we extracted
+        logger.info(`[PERCEPTION_AGENT] Extracted ${perceptionResults.extractedFrames.length} frames`);
       } catch (error) {
         logger.warn(`[PERCEPTION_AGENT] Frame extraction failed: ${error.message}`);
       }
     } else if (isImage) {
       // For images, the "frame" is just the image file itself
-      perceptionResults.extractedFrames = [filePath];
+      perceptionResults.extractedFrames = [absoluteFilePath];
+    } else if (isAudio) {
+      // For pure audio files
+      perceptionResults.extractedAudio = absoluteFilePath;
+      perceptionResults.extractedFrames = [absoluteFilePath];
     }
 
     // Extract audio if video
@@ -169,7 +174,7 @@ export const processMedia = async (filePath, scanId) => {
       try {
         const audioPath = path.join(processingDir, 'audio.wav');
         await extractAudio(filePath, audioPath);
-        perceptionResults.extractedAudio = audioPath;
+        perceptionResults.extractedAudio = path.resolve(audioPath);
         logger.info(`[PERCEPTION_AGENT] Audio extracted`);
       } catch (error) {
         logger.warn(`[PERCEPTION_AGENT] Audio extraction failed: ${error.message}`);

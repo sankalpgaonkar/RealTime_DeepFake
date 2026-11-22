@@ -1,6 +1,6 @@
 # API Documentation
 
-Complete API reference for the SENTINEL Deepfake Detection & Authenticity Verification System.
+Complete API reference for the VERITRACE Deepfake Detection & Authenticity Verification System.
 
 ## Table of Contents
 

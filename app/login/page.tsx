@@ -35,7 +35,7 @@ export default function LoginPage() {
               <Shield className="w-10 h-10 text-primary -rotate-45" />
             </div>
             <div className="space-y-1">
-              <h1 className="text-3xl font-black tracking-tighter text-primary uppercase italic">SENTINEL-X</h1>
+              <h1 className="text-3xl font-black tracking-tighter text-primary uppercase italic">VERITRACE-X</h1>
               <p className="text-muted-foreground text-xs font-mono uppercase tracking-[0.2em]">
                 Agentic Deepfake Detection Interface
               </p>

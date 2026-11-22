@@ -9,7 +9,7 @@ import logging
 
 # Import face detection module
 try:
-    from face_detection import detect_and_crop_face
+    from face_detection import detect_and_crop_face, detect_and_crop_multiscale
     FACE_DETECTION_AVAILABLE = True
 except ImportError:
     FACE_DETECTION_AVAILABLE = False
@@ -99,6 +99,27 @@ def preprocess_image(image_input, detect_faces=True, return_face_info=False):
     except Exception as e:
         logger.error(f'[PREPROCESSING] Error preprocessing image: {str(e)}')
         raise
+
+
+def preprocess_image_multiscale(image_input, paddings=(10, 25, 50)):
+    """
+    Preprocess image into multi-scale crops (tight, medium, context) for ensemble detection.
+
+    Args:
+        image_input: File path, PIL Image, or numpy array
+        paddings: Tuple of scale paddings (default: 10, 25, 50)
+
+    Returns:
+        tuple: (list_of_crops, bool face_found)
+    """
+    try:
+        image = load_image(image_input)
+        if FACE_DETECTION_AVAILABLE:
+            return detect_and_crop_multiscale(image, paddings=paddings)
+        return [], False
+    except Exception as e:
+        logger.error(f'[PREPROCESSING] Multi-scale preprocessing error: {str(e)}')
+        return [], False
 
 
 def preprocess_batch(image_paths, detect_faces=True, return_face_counts=False):

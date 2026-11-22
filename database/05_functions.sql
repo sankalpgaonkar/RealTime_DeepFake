@@ -1,5 +1,5 @@
 -- =============================================================================
--- SENTINEL: Deepfake Detection & Authenticity Verification System
+-- VERITRACE: Deepfake Detection & Authenticity Verification System
 -- UCS310 - Database Management System
 -- File: 05_functions.sql  |  PL/SQL - User-Defined Functions
 -- =============================================================================

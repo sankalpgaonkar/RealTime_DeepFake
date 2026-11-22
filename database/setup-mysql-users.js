@@ -8,19 +8,19 @@ import bcrypt from 'bcryptjs';
 
 const USERS_CONFIG = [
   {
-  001  name: 'Harshdeep Athawale',
+  001  name: 'Sankalp Gaonkar',
     email: 'harshdeepathawale27@gmail.com',
     role: 'admin',
     operativeId: 'ADMIN_',
   },
   {
-    name: 'Harshdeep Athawale',
+    name: 'Sankalp Gaonkar',
     email: 'harshdeepathawale777@gmail.com',
     role: 'operative',
     operativeId: 'OP_001',
   },
   {
-    name: 'Harshdeep Athawale',
+    name: 'Sankalp Gaonkar',
     email: 'hathawale_be24@thapar.edu',
     role: 'analyst',
     operativeId: 'AN_001',

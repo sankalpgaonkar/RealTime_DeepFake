@@ -71,7 +71,9 @@ test_*.py
 *_test.js
 
 # Uploads
+uploads
 uploads/
+**/uploads
 **/uploads/
 
 # IDE

@@ -1,6 +1,6 @@
 # PROJECT SYNOPSIS
 
-## SENTINEL – Deepfake Detection & Authenticity Verification System
+## VERITRACE – Deepfake Detection & Authenticity Verification System
 
 ---
 
@@ -19,7 +19,7 @@ With the rapid advancement of Artificial Intelligence and Generative Models, man
 
 Managing verification records manually or through scattered systems leads to inconsistency, redundancy, and difficulty in tracking authenticity results.
 
-SENTINEL is designed as a centralized database-driven Deepfake Detection and Authenticity Verification System that stores and manages users, scan records, verdict classifications, audit logs, and evidence vault data.
+VERITRACE is designed as a centralized database-driven Deepfake Detection and Authenticity Verification System that stores and manages users, scan records, verdict classifications, audit logs, and evidence vault data.
 
 The motivation behind selecting this problem is to understand how real-world media verification platforms rely heavily on structured relational databases for reliability, traceability, and scalability.
 
@@ -57,13 +57,13 @@ Although commercial deepfake detection tools exist, they operate as closed syste
 
 Therefore, there is a need for an academic database-centric system that demonstrates how a deepfake verification platform can be implemented using relational modeling, SQL queries, constraints, and procedural logic.
 
-SENTINEL aims to solve this by providing a structured DBMS solution that manages verification data efficiently while emphasizing backend implementation.
+VERITRACE aims to solve this by providing a structured DBMS solution that manages verification data efficiently while emphasizing backend implementation.
 
 ---
 
 ## 3. Objectives of the Project
 
-- The primary goal of SENTINEL is to develop a backend-driven deepfake detection and authenticity verification system that efficiently manages users, scan records, and evidence data through a centralized relational database.
+- The primary goal of VERITRACE is to develop a backend-driven deepfake detection and authenticity verification system that efficiently manages users, scan records, and evidence data through a centralized relational database.
 
 - The system allows operatives to upload media for scanning, while analysts can review verification results and generate reports.
 
@@ -107,7 +107,7 @@ The project focuses purely on backend database design and implementation. The ma
 
 ## 5. Proposed System Description
 
-SENTINEL is a centralized relational database system where:
+VERITRACE is a centralized relational database system where:
 
 - Admin manages users and monitors activity
 - Operatives submit media for scanning

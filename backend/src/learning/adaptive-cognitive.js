@@ -16,7 +16,7 @@ const DEFAULT_PARAMS = {
     lowBitrateIncrease: 5,
     highUncertaintyDeepfake: 10,
     highUncertaintySuspicious: 5,
-    imageDecrease: 5,
+    imageDecrease: 0,
     multiFrameDecrease: 5,
   },
   // Clamp ranges
