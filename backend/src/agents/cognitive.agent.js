@@ -121,8 +121,8 @@ const generateRichExplanations = (detectionResults, perceptionData) => {
     });
   }
 
-  // Check for localized deepfakes (Peak Risk significantly higher than P90/Average)
-  if (peakRisk > videoScore + 15 && peakRisk > 70) {
+  // Check for localized deepfakes in video (Peak Risk significantly higher than P90/Average across frames)
+  if (perceptionData.mediaType === 'VIDEO' && peakRisk > videoScore + 15 && peakRisk > 70) {
     explanations.push({
       type: 'critical',
       message: 'Localized deepfake segments detected',
@@ -309,10 +309,10 @@ export const generateExplanations = async (detectionResults, perceptionData) => 
       detailedExplanations: richExplanations, // Rich format
       warning: detectionResults.warning || null, // ML service diagnostic (e.g. no faces detected)
       metadata: {
-        facialMatch: 100 - (detectionResults.videoScore || 0),
-        audioMatch: detectionResults.audioScore > 0 ? 100 - detectionResults.audioScore : 0,
-        ganFingerprint: detectionResults.ganFingerprint || 0,
-        temporalConsistency: detectionResults.temporalConsistency || 100,
+        facialMatch: Math.max(0, Math.min(100, Math.round(100 - (detectionResults.videoScore || 0)))),
+        audioMatch: perceptionData.mediaType === 'IMAGE' ? null : Math.round(100 - (detectionResults.audioScore || 0)),
+        ganFingerprint: Math.round(detectionResults.ganFingerprint || 0),
+        temporalConsistency: perceptionData.mediaType === 'IMAGE' ? null : Math.round(detectionResults.temporalConsistency || 100),
         uncertainty: uncertainty,
         frameCount: detectionResults.frameCount || 1,
         thresholds: thresholds,

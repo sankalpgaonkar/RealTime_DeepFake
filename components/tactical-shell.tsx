@@ -86,13 +86,13 @@ export function TacticalShell({
               <span className="text-[10px] text-muted-foreground">SYSTEM_STATUS</span>
               <span className={cn(
                 "flex items-center gap-1",
-                isAuthenticated ? "text-success" : "text-destructive"
+                isAuthenticated ? "text-success" : "text-amber-400"
               )}>
                 <span className={cn(
                   "w-1.5 h-1.5 rounded-full",
-                  isAuthenticated ? "bg-success animate-ping" : "bg-destructive"
+                  isAuthenticated ? "bg-success animate-ping" : "bg-amber-400"
                 )} />
-                {isAuthenticated ? "OPERATIONAL" : "OFFLINE"}
+                {isAuthenticated ? "OPERATIONAL" : "GUEST_STANDBY"}
               </span>
             </div>
           </div>

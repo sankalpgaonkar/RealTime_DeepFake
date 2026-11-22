@@ -352,19 +352,44 @@ def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, au
             fake_probs_arr = np.array(fake_probs) if len(fake_probs) > 0 else np.array([])
             if image_crop_probs is not None and len(image_crop_probs) > 0:
                 crops_p90 = float(np.percentile(image_crop_probs, 90) * 100)
+                crops_max = float(np.max(image_crop_probs) * 100)
                 full_s = float(image_full_prob * 100) if image_full_prob is not None else crops_p90
-                # Dual-Signal Architecture:
-                # 1. Face-Swap deepfake: crops_p90 is elevated (manipulation localized to face).
-                # 2. Whole-image generative AI portrait (Midjourney, DALL-E, SD, Flux): full_s is elevated (synthetic diffusion patterns across frame).
-                # 3. Authentic camera portrait: both crops_p90 and full_s are low (< 25%).
-                video_score = max(crops_p90, full_s)
+
+                # Adaptive Dual-Signal Decision Architecture:
+                # 1. Authentic Human Photo:
+                #    If all face crops across scales (10%, 25%, 50%) are solidly authentic (crops_max < 12%),
+                #    the facial features, skin pores, and blending are genuinely human.
+                #    In real portraits, complex clothing, jewelry, or busy backgrounds can cause
+                #    out-of-distribution noise on the full frame for models trained on cropped faces.
+                #    We do NOT let background noise override an undeniably authentic face.
+                if crops_max < 12.0:
+                    video_score = 0.90 * crops_p90 + 0.10 * min(full_s, 25.0)
+                    peak_risk = float(max(crops_max, video_score))
+                    mean_risk = float(video_score)
+                elif crops_p90 >= 40.0:
+                    # 2. Localized face-swap / high-confidence facial manipulation:
+                    video_score = max(crops_p90, full_s)
+                    peak_risk = float(max(crops_max, full_s))
+                    mean_risk = float(video_score)
+                elif full_s >= 65.0:
+                    # 3. Whole-canvas Generative AI (e.g. Midjourney / FLUX) with non-authentic crop cues:
+                    video_score = max(full_s, crops_p90)
+                    peak_risk = float(max(crops_max, full_s))
+                    mean_risk = float(video_score)
+                else:
+                    # 4. Intermediate zone: balanced combination
+                    video_score = 0.60 * crops_p90 + 0.40 * full_s
+                    peak_risk = float(max(crops_max, video_score))
+                    mean_risk = float(video_score)
             elif len(fake_probs_arr) > 0:
                 video_score = float(fake_probs_arr[0] * 100)
+                peak_risk = video_score
+                mean_risk = video_score
             else:
                 video_score = 0.0
+                peak_risk = 0.0
+                mean_risk = 0.0
 
-            peak_risk = float(np.max(fake_probs_arr) * 100) if len(fake_probs_arr) > 0 else video_score
-            mean_risk = float(np.mean(fake_probs_arr) * 100) if len(fake_probs_arr) > 0 else video_score
             risk_score = video_score
             gan_fingerprint = float(video_score)
             temporal_consistency = 100.0

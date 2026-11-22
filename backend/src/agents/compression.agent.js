@@ -84,10 +84,19 @@ const assessMediaQuality = (metadata, learnedParams = null) => {
  * @param {Object} [learnedSuspicion] - Learned codec suspicion scores (optional)
  * @returns {Object} Codec analysis
  */
-const analyzeCodec = (metadata, learnedSuspicion = null) => {
+const analyzeCodec = (metadata, learnedSuspicion = null, isImage = false) => {
   const codec = (metadata.codec || 'unknown').toLowerCase();
   let suspicionScore = 0;
   const codecFindings = [];
+
+  // For still IMAGE files, FFmpeg reports 'mjpeg' because JPEG images are decoded via the mjpeg decoder.
+  // This is completely standard camera/image encoding, NOT suspicious Motion-JPEG video.
+  if (isImage && (codec.includes('mjpeg') || codec.includes('jpeg') || codec.includes('jpg') || codec.includes('png') || codec.includes('webp'))) {
+    return {
+      suspicionScore: 0,
+      codecFindings: [],
+    };
+  }
 
   // Use learned scores if available, otherwise hardcoded defaults
   const scores = learnedSuspicion || {
@@ -134,7 +143,8 @@ export const analyzeCompression = async (perceptionData, detectionScores) => {
     const qualityAssessment = assessMediaQuality(metadata, learnedParams);
 
     // Analyze codec with learned suspicion scores
-    const codecAnalysis = analyzeCodec(metadata, learnedParams?.codecSuspicion || null);
+    const isImage = perceptionData.mediaType === 'IMAGE';
+    const codecAnalysis = analyzeCodec(metadata, learnedParams?.codecSuspicion || null, isImage);
 
     // Combine all compression-related findings
     const compressionArtifacts = [

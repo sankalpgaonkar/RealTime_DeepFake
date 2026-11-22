@@ -21,9 +21,9 @@ export interface ScanResult {
   explanations: string[]
   metadata: {
     facialMatch: number
-    audioMatch: number
+    audioMatch?: number | null
     ganFingerprint: number
-    temporalConsistency: number
+    temporalConsistency?: number | null
     peakRisk?: number
     meanRisk?: number
   }

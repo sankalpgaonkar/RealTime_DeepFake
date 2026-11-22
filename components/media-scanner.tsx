@@ -644,10 +644,14 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
             {/* Analysis Metrics */}
             {status !== "idle" && result && (
               <div className="space-y-4">
-                <AnalysisMetric label="FACIAL_BIOMETRICS" value={result.metadata?.facialMatch || 0} />
-                <AnalysisMetric label="AUDIO_PHONETIC_MATCH" value={result.metadata?.audioMatch || 0} />
-                <AnalysisMetric label="GAN_FINGERPRINT" value={result.metadata?.ganFingerprint || 0} />
-                <AnalysisMetric label="TEMPORAL_CONSISTENCY" value={result.metadata?.temporalConsistency || 0} />
+                <AnalysisMetric label="FACIAL_BIOMETRICS" value={result.metadata?.facialMatch ?? 0} />
+                {result.metadata?.audioMatch !== null && result.metadata?.audioMatch !== undefined && result.mediaType !== "IMAGE" && (
+                  <AnalysisMetric label="AUDIO_PHONETIC_MATCH" value={result.metadata.audioMatch} />
+                )}
+                <AnalysisMetric label="GAN_FINGERPRINT" value={result.metadata?.ganFingerprint ?? 0} />
+                {result.metadata?.temporalConsistency !== null && result.metadata?.temporalConsistency !== undefined && result.mediaType !== "IMAGE" && (
+                  <AnalysisMetric label="TEMPORAL_CONSISTENCY" value={result.metadata.temporalConsistency} />
+                )}
                 {result.metadata?.peakRisk !== undefined && (
                   <AnalysisMetric label="PEAK_RISK_SEGMENT" value={result.metadata.peakRisk} />
                 )}
