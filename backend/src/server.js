@@ -51,64 +51,6 @@ const startServer = async () => {
       process.exit(1);
     }
 
-    // Connect to MongoDB
-    logger.info('Connecting to database...');
-    try {
-      await connectDB();
-    } catch (dbError) {
-      logger.error('Initial MongoDB connection error (server will start and retry in background):', dbError.message);
-    }
-
-    // Initialize cache (optional - gracefully handles if Redis unavailable)
-    try {
-      const { initializeCache } = await import('./utils/cache.js');
-      await initializeCache();
-    } catch (error) {
-      logger.warn('[SERVER] Failed to initialize cache:', error.message);
-      logger.warn('[SERVER] Caching disabled. System will work without cache.');
-    }
-
-    // Initialize email service (optional - gracefully handles if SMTP not configured)
-    try {
-      await initializeEmailService();
-    } catch (error) {
-      logger.warn('[SERVER] Failed to initialize email service:', error.message);
-      logger.warn('[SERVER] Email notifications disabled. System will work without email.');
-    }
-
-    // Initialize scan queue and processor (optional - gracefully handles if Redis unavailable)
-    try {
-      const scanQueue = createScanQueue();
-      if (scanQueue) {
-        setupScanProcessor(scanQueue);
-        logger.info('[SERVER] Scan queue processor initialized');
-      } else {
-        logger.warn('[SERVER] Scan queue not available (Redis may not be running). Batch processing will use direct processing.');
-      }
-    } catch (error) {
-      logger.warn('[SERVER] Failed to initialize scan queue:', error.message);
-      logger.warn('[SERVER] Batch processing will use direct processing as fallback.');
-    }
-
-    // Initialize learning scheduler (optional - gracefully handles if Redis unavailable)
-    try {
-      const { initializeLearningScheduler } = await import('./learning/learning.scheduler.js');
-      await initializeLearningScheduler();
-      logger.info('[SERVER] Learning scheduler initialized');
-    } catch (error) {
-      logger.warn('[SERVER] Failed to initialize learning scheduler:', error.message);
-      logger.warn('[SERVER] Self-learning will not run automatically.');
-    }
-
-    // Initialize ML service health checks (optional - gracefully handles if ML service unavailable)
-    try {
-      startHealthChecks();
-      logger.info('[SERVER] ML service health checks started');
-    } catch (error) {
-      logger.warn('[SERVER] Failed to start ML service health checks:', error.message);
-      logger.warn('[SERVER] ML service integration will use fallback detection.');
-    }
-
     // Create HTTP server
     const httpServer = createServer(app);
 
@@ -161,14 +103,75 @@ const startServer = async () => {
       setupSocketHandlers(socket);
     });
 
-    // Start HTTP server with Socket.IO
-    httpServer.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
+    // Start HTTP server immediately on 0.0.0.0 to satisfy cloud health checks instantly
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      logger.info(`Server running on port ${PORT} (0.0.0.0)`);
       logger.info(`Environment: ${config.server.nodeEnv}`);
-      logger.info(`Health check: http://localhost:${PORT}/health`);
-      logger.info(`API base: http://localhost:${PORT}/api`);
-      logger.info(`WebSocket server: ws://localhost:${PORT}`);
+      logger.info(`Health check: http://0.0.0.0:${PORT}/health`);
+      logger.info(`API base: http://0.0.0.0:${PORT}/api`);
+      logger.info(`WebSocket server: ws://0.0.0.0:${PORT}`);
     });
+
+    // Initialize database & background services asynchronously
+    (async () => {
+      // Connect to MongoDB
+      logger.info('Connecting to database...');
+      try {
+        await connectDB();
+      } catch (dbError) {
+        logger.error('Initial MongoDB connection error (server will continue running and retry):', dbError.message);
+      }
+
+      // Initialize cache (optional - gracefully handles if Redis unavailable)
+      try {
+        const { initializeCache } = await import('./utils/cache.js');
+        await initializeCache();
+      } catch (error) {
+        logger.warn('[SERVER] Failed to initialize cache:', error.message);
+        logger.warn('[SERVER] Caching disabled. System will work without cache.');
+      }
+
+      // Initialize email service (optional - gracefully handles if SMTP not configured)
+      try {
+        await initializeEmailService();
+      } catch (error) {
+        logger.warn('[SERVER] Failed to initialize email service:', error.message);
+        logger.warn('[SERVER] Email notifications disabled. System will work without email.');
+      }
+
+      // Initialize scan queue and processor (optional - gracefully handles if Redis unavailable)
+      try {
+        const scanQueue = createScanQueue();
+        if (scanQueue) {
+          setupScanProcessor(scanQueue);
+          logger.info('[SERVER] Scan queue processor initialized');
+        } else {
+          logger.warn('[SERVER] Scan queue not available (Redis may not be running). Batch processing will use direct processing.');
+        }
+      } catch (error) {
+        logger.warn('[SERVER] Failed to initialize scan queue:', error.message);
+        logger.warn('[SERVER] Batch processing will use direct processing as fallback.');
+      }
+
+      // Initialize learning scheduler (optional - gracefully handles if Redis unavailable)
+      try {
+        const { initializeLearningScheduler } = await import('./learning/learning.scheduler.js');
+        await initializeLearningScheduler();
+        logger.info('[SERVER] Learning scheduler initialized');
+      } catch (error) {
+        logger.warn('[SERVER] Failed to initialize learning scheduler:', error.message);
+        logger.warn('[SERVER] Self-learning will not run automatically.');
+      }
+
+      // Initialize ML service health checks (optional - gracefully handles if ML service unavailable)
+      try {
+        startHealthChecks();
+        logger.info('[SERVER] ML service health checks started');
+      } catch (error) {
+        logger.warn('[SERVER] Failed to start ML service health checks:', error.message);
+        logger.warn('[SERVER] ML service integration will use fallback detection.');
+      }
+    })();
 
     const server = httpServer;
 
