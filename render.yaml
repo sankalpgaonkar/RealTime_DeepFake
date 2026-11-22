@@ -24,16 +24,8 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: veritrace-backend
-          property: host
         value: https://veritrace-backend.onrender.com/api
       - key: NEXT_PUBLIC_WS_URL
-        fromService:
-          type: web
-          name: veritrace-backend
-          property: host
         value: https://veritrace-backend.onrender.com
 
   # ----------------------------------------------------------------------------

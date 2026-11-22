@@ -61,13 +61,19 @@ const config = {
     email: process.env.ADMIN_EMAIL || '',
   },
   frontend: {
-    url: process.env.FRONTEND_URL || 'http://localhost:3002',
+    url: (() => {
+      const raw = process.env.FRONTEND_URL || 'http://localhost:3002';
+      return (raw.startsWith('http://') || raw.startsWith('https://')) ? raw : `https://${raw}`;
+    })(),
   },
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
   ml: {
-    serviceUrl: process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001',
+    serviceUrl: (() => {
+      const raw = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001';
+      return (raw.startsWith('http://') || raw.startsWith('https://')) ? raw : `http://${raw}`;
+    })(),
     enabled: process.env.ML_SERVICE_ENABLED !== 'false',
     timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10),
     retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
