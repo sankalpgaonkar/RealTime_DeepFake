@@ -64,11 +64,6 @@ services:
           type: web
           name: veritrace-frontend
           property: host
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: veritrace-redis
-          property: connectionString
 
   # ----------------------------------------------------------------------------
   # 3. Machine Learning Inference Service (PyTorch / SigLIP)
@@ -77,7 +72,7 @@ services:
     name: veritrace-ml
     runtime: python
     rootDir: ml-service
-    plan: starter # Starter plan (1GB+ RAM) recommended for PyTorch models
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180 app:app
     healthCheckPath: /health
@@ -86,11 +81,3 @@ services:
         value: 3.11.9
       - key: ML_ENV
         value: production
-
-  # ----------------------------------------------------------------------------
-  # 4. Redis Cache & Asynchronous Queue
-  # ----------------------------------------------------------------------------
-  - type: redis
-    name: veritrace-redis
-    plan: free
-    ipAllowList: [] # Internal private network access only
