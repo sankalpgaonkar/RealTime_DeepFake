@@ -89,8 +89,8 @@ const config = {
       return url;
     })(),
     enabled: process.env.ML_SERVICE_ENABLED !== 'false',
-    timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10),
-    retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
+    timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '180000', 10),
+    retries: parseInt(process.env.ML_SERVICE_RETRIES || '2', 10),
     modelVersion: process.env.ML_MODEL_VERSION || 'v4',
   },
   email: {

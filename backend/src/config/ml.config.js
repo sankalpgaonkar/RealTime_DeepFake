@@ -29,9 +29,9 @@ const mlConfig = {
   
   // ML Service Configuration
   enabled: process.env.ML_SERVICE_ENABLED !== 'false', // Default to enabled if env var not set
-  timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '60000', 10), // 60 seconds default for cloud inference
-  retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
-  retryDelay: parseInt(process.env.ML_SERVICE_RETRY_DELAY || '1000', 10), // 1 second
+  timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '180000', 10), // 180 seconds default for cloud CPU inference
+  retries: parseInt(process.env.ML_SERVICE_RETRIES || '2', 10),
+  retryDelay: parseInt(process.env.ML_SERVICE_RETRY_DELAY || '2000', 10), // 2 seconds
 
   // Model Configuration
   modelVersion: process.env.ML_MODEL_VERSION || 'v4',
