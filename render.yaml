@@ -74,11 +74,19 @@ services:
     runtime: python
     rootDir: ml-service
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180 app:app
+    buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu torchvision==0.16.2+cpu && pip install -r requirements.txt --no-deps torch torchvision || pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 app:app
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: ML_ENV
         value: production
+      - key: DISABLE_AUDIO_MODEL
+        value: "true"
+      - key: HF_HUB_DISABLE_SYMLINKS_WARNING
+        value: "1"
+      - key: TRANSFORMERS_CACHE
+        value: /tmp/hf_cache
+      - key: HF_HOME
+        value: /tmp/hf_home

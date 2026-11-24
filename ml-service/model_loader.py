@@ -157,6 +157,13 @@ def load_audio_model():
         logger.info('[MODEL_LOADER] Audio model already loaded, returning cached instance')
         return _audio_pipeline
 
+    # On Render free tier (512MB RAM), skip the audio model (~500MB) to avoid OOM.
+    # Set DISABLE_AUDIO_MODEL=true to skip audio model loading.
+    if os.environ.get('DISABLE_AUDIO_MODEL', '').lower() in ('true', '1', 'yes'):
+        logger.warning('[MODEL_LOADER] Audio model loading DISABLED (DISABLE_AUDIO_MODEL=true). Audio deepfake detection will not be available.')
+        _audio_model_loaded = False
+        return None
+
     try:
         device = get_device()
 
