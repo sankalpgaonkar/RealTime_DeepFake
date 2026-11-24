@@ -18,6 +18,11 @@ let _learningQueue = null;
  * Creates a Bull queue with an hourly repeatable job
  */
 export const initializeLearningScheduler = () => {
+  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+    logger.warn('[LEARNING_SCHEDULER] REDIS_URL is not configured; learning scheduler disabled');
+    return null;
+  }
+
   try {
     _learningQueue = new Queue('learning-cycle', REDIS_URL, {
       defaultJobOptions: {

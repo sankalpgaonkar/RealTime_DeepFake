@@ -25,6 +25,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
   const [scanning, setScanning] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [scanProgress, setScanProgress] = useState(0)
+  const [scanStage, setScanStage] = useState("")
   const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "complete" | "error">("idle")
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -197,6 +198,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
       setScanning(true)
       setUploadProgress(0)
       setScanProgress(0)
+      setScanStage("Uploading")
 
       // Upload file
       const uploadResponse = await apiService.uploadScan(file, (progress) => {
@@ -212,6 +214,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
       setStatus("processing")
       setUploadProgress(100)
       setScanProgress(10)
+      setScanStage("Initializing")
 
       // Dual Hybrid Tracking: Real-time WebSocket + fast polling safety net
       await new Promise<void>((resolve, reject) => {
@@ -255,7 +258,8 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
           console.log('[MEDIA_SCANNER] Received scan update:', data)
 
           if (data.type === 'progress') {
-            setScanProgress(data.progress || 50)
+            setScanProgress((prev) => Math.max(prev, data.progress || 50))
+            if (data.stage) setScanStage(data.stage)
           } else if (data.type === 'complete') {
             apiService.getScan(scanId).then((response) => {
               if (response.success && response.data) {
@@ -282,7 +286,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
               } else if (resp.data.status === 'FAILED') {
                 finishWithError(resp.data.error || 'Scan processing failed')
               } else if (resp.data.status === 'PROCESSING') {
-                setScanProgress((prev) => Math.max(prev, 60))
+                setScanProgress((prev) => Math.max(prev, 50))
               }
             }
           } catch {
@@ -296,10 +300,10 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
         // Heartbeat poll every 1.5 seconds in parallel with WebSocket
         pollInterval = setInterval(checkStatus, 1500)
 
-        // Timeout fallback (2 minutes)
+        // Model warm-up and CPU inference can take several minutes on Render free tier.
         timeoutId = setTimeout(() => {
           finishWithError("Scan timeout - please refresh scan status")
-        }, 2 * 60 * 1000)
+        }, 12 * 60 * 1000)
       })
     } catch (err) {
       console.error("Scan error:", err)
@@ -308,6 +312,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
       setScanning(false)
       setUploadProgress(0)
       setScanProgress(0)
+      setScanStage("")
     }
   }
 
@@ -319,6 +324,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
     setStatus("idle")
     setUploadProgress(0)
     setScanProgress(0)
+    setScanStage("")
     setResult(null)
     setError(null)
     setCurrentScanId(null)
@@ -546,7 +552,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
               ) : status === "processing" ? (
                 <>
                   <Play className="mr-2 animate-pulse" size={18} />
-                  {batchMode ? `Processing ${batchResults.length} files...` : `Processing... ${Math.round(scanProgress)}%`}
+                  {batchMode ? `Processing ${batchResults.length} files...` : `${scanStage || "Processing"}... ${Math.round(scanProgress)}%`}
                 </>
               ) : (
                 <>

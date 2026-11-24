@@ -67,8 +67,10 @@ export const checkMLServiceHealth = async () => {
   }
 };
 
-const waitForModelReady = async () => {
+const waitForModelReady = async (onProgress) => {
   const deadline = Date.now() + mlConfig.warmupTimeout;
+  const startedAt = Date.now();
+  let lastReportedProgress = 49;
 
   while (Date.now() < deadline) {
     const controller = new AbortController();
@@ -90,6 +92,14 @@ const waitForModelReady = async () => {
       if (!health.model_status || health.model_status === 'loaded') return;
       if (health.model_status === 'failed') {
         throw new Error(health.model_error || 'ML image model failed to load');
+      }
+      const progress = Math.min(
+        60,
+        50 + Math.floor(((Date.now() - startedAt) / mlConfig.warmupTimeout) * 10)
+      );
+      if (onProgress && progress > lastReportedProgress) {
+        lastReportedProgress = progress;
+        onProgress(progress, 'Detection Agent - Warming up AI model');
       }
       logger.info('[ML_CLIENT] ML image model is loading; waiting before inference');
     } finally {
@@ -146,7 +156,7 @@ export const stopHealthChecks = () => {
  * @param {Object} perceptionData - Data from perception agent
  * @returns {Promise<Object>} ML inference results
  */
-export const callMLService = async (perceptionData) => {
+export const callMLService = async (perceptionData, onProgress) => {
   if (!isMLServiceEnabled()) {
     throw new Error('ML service is disabled');
   }
@@ -159,7 +169,10 @@ export const callMLService = async (perceptionData) => {
     }
   }
 
-  await waitForModelReady();
+  await waitForModelReady(onProgress);
+  if (onProgress) {
+    onProgress(60, 'Detection Agent - Running ML inference');
+  }
 
   const inferenceUrl = getInferenceUrl(mlConfig.modelVersion);
   let lastError;
@@ -207,6 +220,21 @@ export const callMLService = async (perceptionData) => {
 
       logger.debug(`[ML_CLIENT] Calling ML service (attempt ${attempt}/${mlConfig.retries}): ${inferenceUrl}`);
 
+      const inferenceStartedAt = Date.now();
+      let lastReportedProgress = 60;
+      const progressInterval = onProgress
+        ? setInterval(() => {
+          const progress = Math.min(
+            70,
+            60 + Math.floor(((Date.now() - inferenceStartedAt) / mlConfig.timeout) * 10)
+          );
+          if (progress > lastReportedProgress) {
+            lastReportedProgress = progress;
+            onProgress(progress, 'Detection Agent - Running ML inference');
+          }
+        }, 15000)
+        : null;
+
       let response;
       try {
         response = await fetch(inferenceUrl, {
@@ -216,6 +244,7 @@ export const callMLService = async (perceptionData) => {
         });
       } finally {
         clearTimeout(timeoutId);
+        if (progressInterval) clearInterval(progressInterval);
       }
 
       if (!response.ok) {

@@ -90,7 +90,17 @@ export const processScan = async (scanId, filePath, userId = null) => {
     if (targetUserId) {
       emitScanUpdateToUser(targetUserId, scanId, { type: 'status', status: 'PROCESSING', progress: 50, stage: 'Detection Agent' });
     }
-    const detectionScores = await detectDeepfake(perceptionData);
+    const detectionScores = await detectDeepfake(perceptionData, (progress, stage) => {
+      emitScanProgress(scanId, progress, stage);
+      if (targetUserId) {
+        emitScanUpdateToUser(targetUserId, scanId, {
+          type: 'status',
+          status: 'PROCESSING',
+          progress,
+          stage,
+        });
+      }
+    });
 
     // Step 3: Compression Agent
     logger.info(`[SCAN_SERVICE] Step 3/4: Compression Agent`);

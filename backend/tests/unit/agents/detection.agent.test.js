@@ -112,6 +112,25 @@ describe('Detection Agent', () => {
             expect(result).toEqual(mockMLResults);
         });
 
+        test('should forward ML progress updates', async () => {
+            const mockPerceptionData = {
+                hash: 'test-hash',
+                mediaType: 'VIDEO',
+                extractedFrames: ['/path/to/frame1.jpg']
+            };
+            const onProgress = jest.fn();
+            checkMLServiceHealth.mockResolvedValue(true);
+            callMLService.mockImplementation(async (_data, reportProgress) => {
+                reportProgress(60, 'Detection Agent - Running ML inference');
+                return { riskScore: 50 };
+            });
+
+            await detectDeepfake(mockPerceptionData, onProgress);
+
+            expect(callMLService).toHaveBeenCalledWith(mockPerceptionData, onProgress);
+            expect(onProgress).toHaveBeenCalledWith(60, 'Detection Agent - Running ML inference');
+        });
+
         test('should throw error if ML service is unhealthy', async () => {
             checkMLServiceHealth.mockResolvedValue(false);
 

@@ -16,11 +16,10 @@ Render provides Infrastructure-as-Code via the included [`render.yaml`](../rende
 3. **Create New Blueprint Instance**:
    - In the top-right corner, click **New +** and select **Blueprint**.
    - Select your GitHub repository: `RealTime_DeepFake`.
-   - Render will parse `render.yaml` and show 4 items to be created:
+   - Render will parse `render.yaml` and show 3 services to be created:
      1. `veritrace-frontend` (Next.js Web Service)
      2. `veritrace-backend` (Node.js API Service)
      3. `veritrace-ml` (PyTorch ML Service)
-     4. `veritrace-redis` (Internal Redis)
 4. **Enter Environment Variables**:
    - Under `veritrace-backend`, paste your **MongoDB Atlas Connection URI**:
      ```text
@@ -28,7 +27,9 @@ Render provides Infrastructure-as-Code via the included [`render.yaml`](../rende
      ```
    - All other secrets (`JWT_SECRET`, `ENCRYPTION_KEY`, `ENCRYPTION_IV`) are generated automatically by Render.
 5. **Click "Apply"**:
-   Render will build and deploy all 4 services together. Once finished, open your `veritrace-frontend` URL (e.g., `https://veritrace-frontend.onrender.com`).
+   Render will build and deploy all 3 services together. Once finished, open your `veritrace-frontend` URL (e.g., `https://veritrace-frontend.onrender.com`).
+
+The blueprint does not provision Redis. Without a `REDIS_URL`, individual scans still run and batch scans fall back to direct processing, while queued processing and the automatic learning scheduler are disabled. To enable those optional features, provision a Render Key Value instance and set the backend's `REDIS_URL` to its connection URL.
 
 ---
 

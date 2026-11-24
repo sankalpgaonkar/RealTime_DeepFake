@@ -16,6 +16,11 @@ const REDIS_URL = process.env.REDIS_URL || config.redis?.url || 'redis://localho
  * @returns {Queue} Bull queue instance
  */
 export const createScanQueue = () => {
+  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+    logger.warn('[QUEUE] REDIS_URL is not configured; scan queue disabled');
+    return null;
+  }
+
   try {
     const scanQueue = new Queue('scan-processing', REDIS_URL, {
       defaultJobOptions: {

@@ -70,7 +70,7 @@ export const aggregatePredictions = (predictions) => {
  * @param {Object} perceptionData - Data from perception agent
  * @returns {Promise<Object>} Aggregated detection scores
  */
-export const detectDeepfake = async (perceptionData) => {
+export const detectDeepfake = async (perceptionData, onProgress) => {
   try {
     logger.info(`[DETECTION_AGENT] Starting deepfake detection analysis`);
 
@@ -88,7 +88,9 @@ export const detectDeepfake = async (perceptionData) => {
     logger.info(`[DETECTION_AGENT] Using ML service for detection`);
 
     // Call ML service
-    const mlResults = await callMLService(perceptionData);
+    const mlResults = onProgress
+      ? await callMLService(perceptionData, onProgress)
+      : await callMLService(perceptionData);
 
     // Log detailed results
     logger.info(`[DETECTION_AGENT] ML service detection complete`);

@@ -163,8 +163,12 @@ const startServer = async () => {
       // Initialize learning scheduler (optional - gracefully handles if Redis unavailable)
       try {
         const { initializeLearningScheduler } = await import('./learning/learning.scheduler.js');
-        await initializeLearningScheduler();
-        logger.info('[SERVER] Learning scheduler initialized');
+        const learningQueue = await initializeLearningScheduler();
+        if (learningQueue) {
+          logger.info('[SERVER] Learning scheduler initialized');
+        } else {
+          logger.warn('[SERVER] Learning scheduler disabled (Redis is not configured).');
+        }
       } catch (error) {
         logger.warn('[SERVER] Failed to initialize learning scheduler:', error.message);
         logger.warn('[SERVER] Self-learning will not run automatically.');
