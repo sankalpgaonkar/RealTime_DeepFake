@@ -5,6 +5,9 @@
 
 import mlConfig, { getHealthCheckUrl, getInferenceUrl, isMLServiceEnabled } from '../config/ml.config.js';
 import logger from '../utils/logger.js';
+import fs from 'fs';
+import path from 'path';
+import { getMediaContentType, selectInferenceFrames } from './media-payload.js';
 
 let mlServiceHealthy = false;
 let healthCheckInterval = null;
@@ -24,15 +27,18 @@ export const checkMLServiceHealth = async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), mlConfig.healthCheckTimeout);
 
-    const response = await fetch(healthUrl, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    clearTimeout(timeoutId);
+    let response;
+    try {
+      response = await fetch(healthUrl, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (response.ok) {
       const data = await response.json();
@@ -59,6 +65,41 @@ export const checkMLServiceHealth = async () => {
     mlServiceHealthy = false;
     return false;
   }
+};
+
+const waitForModelReady = async () => {
+  const deadline = Date.now() + mlConfig.warmupTimeout;
+
+  while (Date.now() < deadline) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), mlConfig.healthCheckTimeout);
+    try {
+      const response = await fetch(getHealthCheckUrl(), {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`ML service health check returned ${response.status}`);
+      }
+
+      const health = await response.json();
+      mlServiceHealthy = health.status === 'healthy' || health.status === 'ok';
+      if (!mlServiceHealthy) {
+        throw new Error(health.message || 'ML service is unhealthy');
+      }
+      if (!health.model_status || health.model_status === 'loaded') return;
+      if (health.model_status === 'failed') {
+        throw new Error(health.model_error || 'ML image model failed to load');
+      }
+      logger.info('[ML_CLIENT] ML image model is loading; waiting before inference');
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, mlConfig.warmupPollInterval));
+  }
+
+  throw new Error(`ML model did not become ready within ${mlConfig.warmupTimeout}ms`);
 };
 
 /**
@@ -118,6 +159,8 @@ export const callMLService = async (perceptionData) => {
     }
   }
 
+  await waitForModelReady();
+
   const inferenceUrl = getInferenceUrl(mlConfig.modelVersion);
   let lastError;
 
@@ -127,31 +170,53 @@ export const callMLService = async (perceptionData) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), mlConfig.timeout);
 
-      // Prepare request payload
-      const payload = {
+      const selectedFrames = perceptionData.mediaType === 'AUDIO'
+        ? []
+        : selectInferenceFrames(
+          perceptionData.extractedFrames || [],
+          mlConfig.maxInferenceFrames
+        );
+      const metadata = {
         hash: perceptionData.hash,
         mediaType: perceptionData.mediaType,
         metadata: perceptionData.metadata,
-        extractedFrames: perceptionData.extractedFrames || [],
-        extractedAudio: perceptionData.extractedAudio || null,
         modelVersion: mlConfig.modelVersion,
-        // Tell the ML service how many frames the perception agent extracted so
-        // it can dynamically set its processing ceiling (instead of hardcoding 30).
-        maxFrames: perceptionData.maxFrames || null,
+        maxFrames: selectedFrames.length,
       };
+      const formData = new FormData();
+      formData.set('metadata', JSON.stringify(metadata));
+
+      for (const framePath of selectedFrames) {
+        const frame = fs.readFileSync(framePath);
+        const filename = path.basename(framePath);
+        formData.append(
+          'frames',
+          new Blob([frame], { type: getMediaContentType(framePath) }),
+          filename
+        );
+      }
+
+      if (perceptionData.extractedAudio && fs.existsSync(perceptionData.extractedAudio)) {
+        const audio = fs.readFileSync(perceptionData.extractedAudio);
+        formData.append(
+          'audio',
+          new Blob([audio], { type: getMediaContentType(perceptionData.extractedAudio) }),
+          path.basename(perceptionData.extractedAudio)
+        );
+      }
 
       logger.debug(`[ML_CLIENT] Calling ML service (attempt ${attempt}/${mlConfig.retries}): ${inferenceUrl}`);
 
-      const response = await fetch(inferenceUrl, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      clearTimeout(timeoutId);
+      let response;
+      try {
+        response = await fetch(inferenceUrl, {
+          method: 'POST',
+          signal: controller.signal,
+          body: formData,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         const errorText = await response.text();

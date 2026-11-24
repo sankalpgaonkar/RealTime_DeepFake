@@ -13,6 +13,9 @@ This service:
 
 import os
 import time
+import json
+import shutil
+import tempfile
 import numpy as np
 from PIL import Image
 from flask import Flask, request, jsonify
@@ -40,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 # Global model status
 _model_loaded = False
+_model_status = 'loading'
+_model_load_error = None
 
 # ---------------------------------------------------------------------------
 # Inference configuration — all thresholds driven by environment variables.
@@ -87,12 +92,11 @@ def resolve_file_path(p):
 def load_model_on_startup():
     """Load models when service starts.
 
-    Image model is loaded synchronously so health-check returns immediately.
-    Audio model is loaded in a background daemon thread to avoid blocking startup
-    while still being warm before the first real video-with-audio request arrives.
+    The image model loads in a background thread; the audio model loads only when
+    requested. The web process can pass Render health checks while models warm up.
     """
     import threading
-    global _model_loaded
+    global _model_loaded, _model_status, _model_load_error
 
     # Keep Gunicorn startup fast. Render health checks remain available while models
     # are downloaded in a daemon thread instead of blocking process initialization.
@@ -102,26 +106,19 @@ def load_model_on_startup():
             logger.info('[ML_SERVICE] Loading image model in background thread...')
             load_model()
             _model_loaded = True
+            _model_status = 'loaded'
+            _model_load_error = None
             logger.info('[ML_SERVICE] Image model loaded successfully')
         except Exception as e:
             logger.error(f'[ML_SERVICE] Failed to load image model: {str(e)}', exc_info=True)
             _model_loaded = False
+            _model_status = 'failed'
+            _model_load_error = str(e)
 
     image_thread = threading.Thread(target=_preload_image, daemon=True, name='image-model-loader')
     image_thread.start()
 
-    # Pre-warm audio model in the background too.
-    def _preload_audio():
-        try:
-            logger.info('[ML_SERVICE] Pre-loading audio model in background thread...')
-            load_audio_model()
-            logger.info('[ML_SERVICE] Audio model pre-loaded successfully')
-        except Exception as e:
-            logger.warning(f'[ML_SERVICE] Background audio model load failed: {str(e)} — will retry lazily on first use')
-
-    audio_thread = threading.Thread(target=_preload_audio, daemon=True, name='audio-model-loader')
-    audio_thread.start()
-    logger.info('[ML_SERVICE] Audio model loading in background thread (non-blocking)')
+    logger.info('[ML_SERVICE] Audio model will load on the first audio inference request')
 
 
 def extract_fake_probability(result):
@@ -520,7 +517,7 @@ def index():
     """Root status and service info endpoint"""
     model_info = get_model_info()
     return jsonify({
-        'status': 'healthy' if _model_loaded else 'unhealthy',
+        'status': 'unhealthy' if _model_status == 'failed' else 'healthy',
         'service': 'deepfake-detection-ml-service',
         'version': '4.1.0',
         'message': 'Deepfake Detection ML Inference Service is running',
@@ -551,7 +548,8 @@ def health_check():
         'version': '4.1.0',
         # Image model info
         'model': model_info['model'],
-        'model_status': 'loaded' if _model_loaded else 'not_loaded',
+        'model_status': _model_status,
+        'model_error': _model_load_error,
         'accuracy': model_info['accuracy'],
         'architecture': model_info['architecture'],
         'device': model_info['device'],
@@ -561,7 +559,7 @@ def health_check():
         'audio_accuracy': model_info.get('audio_accuracy'),
         'audio_processing_available': is_audio_processing_available(),
         'timestamp': datetime.utcnow().isoformat()
-    }), 200 if _model_loaded else 503
+    }), 503 if _model_status == 'failed' else 200
 
 
 @app.route('/api/v1/inference', methods=['POST'])
@@ -570,14 +568,42 @@ def inference():
     Deepfake detection inference endpoint
     """
     start_time = time.time()
+    inference_temp_dir = None
 
     try:
-        data = request.get_json()
+        if request.mimetype == 'multipart/form-data':
+            try:
+                data = json.loads(request.form.get('metadata', '{}'))
+            except json.JSONDecodeError as error:
+                return jsonify({'error': 'Invalid request', 'message': f'Invalid metadata JSON: {error}'}), 400
 
-        if not data:
+            inference_temp_dir = tempfile.mkdtemp(prefix='ml-inference-')
+            extracted_frames = []
+            for index, uploaded_frame in enumerate(request.files.getlist('frames')):
+                extension = os.path.splitext(uploaded_frame.filename or '')[1].lower()
+                if extension not in {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif'}:
+                    extension = '.jpg'
+                frame_path = os.path.join(inference_temp_dir, f'frame_{index:04d}{extension}')
+                uploaded_frame.save(frame_path)
+                extracted_frames.append(frame_path)
+
+            uploaded_audio = request.files.get('audio')
+            extracted_audio = None
+            if uploaded_audio:
+                extension = os.path.splitext(uploaded_audio.filename or '')[1].lower()
+                if extension not in {'.wav', '.mp3', '.m4a', '.aac', '.ogg', '.flac', '.opus'}:
+                    extension = '.wav'
+                extracted_audio = os.path.join(inference_temp_dir, f'audio{extension}')
+                uploaded_audio.save(extracted_audio)
+        else:
+            data = request.get_json()
+            extracted_frames = data.get('extractedFrames', []) if data else []
+            extracted_audio = data.get('extractedAudio') if data else None
+
+        if not isinstance(data, dict) or not data:
             return jsonify({
                 'error': 'Invalid request',
-                'message': 'Request body must be JSON'
+                'message': 'Request body must contain a JSON object'
             }), 400
 
         if not _model_loaded:
@@ -589,8 +615,9 @@ def inference():
         hash_value = data.get('hash', '')
         media_type = data.get('mediaType', 'UNKNOWN')
         model_version = data.get('modelVersion', 'v4')
-        extracted_frames = data.get('extractedFrames', [])
-        extracted_audio = data.get('extractedAudio', None)
+        if request.mimetype != 'multipart/form-data':
+            extracted_frames = data.get('extractedFrames', [])
+            extracted_audio = data.get('extractedAudio', None)
 
         # max_frames: caller (perception agent) sends how many frames it extracted.
         # We respect that value but clamp to our service ceiling (INFERENCE_CONFIG['max_frames']).
@@ -696,7 +723,7 @@ def inference():
             if resolved_audio and os.path.exists(resolved_audio):
                 logger.info(f'[ML_SERVICE] Processing audio track: {resolved_audio}')
 
-                if is_audio_model_loaded() and is_audio_processing_available():
+                if is_audio_processing_available():
                     audio_data = preprocess_audio(resolved_audio)
                     if audio_data['valid']:
                         audio_fake_prob, audio_raw = run_audio_inference(audio_data)
@@ -722,9 +749,6 @@ def inference():
 
         elif media_type == 'AUDIO':
             # Standalone audio deepfake detection
-            if not is_audio_model_loaded():
-                raise ValueError('Audio deepfake detection not available - audio model not loaded')
-
             if not is_audio_processing_available():
                 raise ValueError('Audio processing not available - librosa not installed')
 
@@ -790,6 +814,9 @@ def inference():
             'error': 'Inference failed',
             'message': str(e)
         }), 500
+    finally:
+        if inference_temp_dir:
+            shutil.rmtree(inference_temp_dir, ignore_errors=True)
 
 
 @app.route('/api/v1/retrain', methods=['POST'])

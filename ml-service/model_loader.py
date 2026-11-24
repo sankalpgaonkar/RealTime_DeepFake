@@ -8,6 +8,7 @@ Loads and manages deepfake detection models:
 import os
 import torch
 import logging
+import threading
 from transformers import pipeline
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,8 @@ _audio_pipeline = None
 _device = None
 _audio_model_loaded = False
 _current_version = 'v1.0.0'
-_model_lock = __import__('threading').Lock()
+_model_lock = threading.Lock()
+_audio_model_lock = threading.Lock()
 
 
 def get_device():
@@ -145,6 +147,11 @@ def hot_swap_model(new_model_path):
 
 
 def load_audio_model():
+    with _audio_model_lock:
+        return _load_audio_model()
+
+
+def _load_audio_model():
     """
     Load the audio deepfake detection model (wav2vec2-based)
 

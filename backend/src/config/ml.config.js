@@ -15,9 +15,12 @@ const mlConfig = {
   
   // ML Service Configuration
   enabled: process.env.ML_SERVICE_ENABLED !== 'false', // Default to enabled if env var not set
-  timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10), // 30 seconds default
+  timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '120000', 10),
   retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
   retryDelay: parseInt(process.env.ML_SERVICE_RETRY_DELAY || '1000', 10), // 1 second
+  warmupTimeout: parseInt(process.env.ML_MODEL_WARMUP_TIMEOUT || '300000', 10),
+  warmupPollInterval: parseInt(process.env.ML_MODEL_WARMUP_POLL_INTERVAL || '5000', 10),
+  maxInferenceFrames: parseInt(process.env.ML_MAX_INFERENCE_FRAMES || '24', 10),
 
   // Model Configuration
   modelVersion: process.env.ML_MODEL_VERSION || 'v4',
