@@ -4,7 +4,7 @@
  */
 
 import logger from '../utils/logger.js';
-import { callMLService, checkMLServiceHealth } from '../ml/ml-client.js';
+import { callMLService } from '../ml/ml-client.js';
 import { isMLServiceEnabled } from '../config/ml.config.js';
 
 /**
@@ -77,12 +77,6 @@ export const detectDeepfake = async (perceptionData, onProgress) => {
     // Strictly require ML service
     if (!isMLServiceEnabled()) {
       throw new Error('ML service is disabled in configuration');
-    }
-
-    // Check if ML service is available
-    const isHealthy = await checkMLServiceHealth();
-    if (!isHealthy) {
-      throw new Error('ML service is not healthy');
     }
 
     logger.info(`[DETECTION_AGENT] Using ML service for detection`);

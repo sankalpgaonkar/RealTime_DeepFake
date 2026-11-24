@@ -71,45 +71,64 @@ const waitForModelReady = async (onProgress) => {
   const deadline = Date.now() + mlConfig.warmupTimeout;
   const startedAt = Date.now();
   let lastReportedProgress = 49;
+  let lastHealthError;
 
   while (Date.now() < deadline) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), mlConfig.healthCheckTimeout);
+    let health;
     try {
       const response = await fetch(getHealthCheckUrl(), {
         signal: controller.signal,
         headers: { Accept: 'application/json' },
       });
       if (!response.ok) {
-        throw new Error(`ML service health check returned ${response.status}`);
+        if (response.status < 500 && ![502, 503, 504].includes(response.status)) {
+          throw new Error(`ML service health check returned ${response.status}`);
+        }
+        throw new Error(`ML service is waking up (health check returned ${response.status})`);
       }
 
-      const health = await response.json();
-      mlServiceHealthy = health.status === 'healthy' || health.status === 'ok';
-      if (!mlServiceHealthy) {
-        throw new Error(health.message || 'ML service is unhealthy');
-      }
-      if (!health.model_status || health.model_status === 'loaded') return;
-      if (health.model_status === 'failed') {
-        throw new Error(health.model_error || 'ML image model failed to load');
-      }
-      const progress = Math.min(
-        60,
-        50 + Math.floor(((Date.now() - startedAt) / mlConfig.warmupTimeout) * 10)
-      );
-      if (onProgress && progress > lastReportedProgress) {
-        lastReportedProgress = progress;
-        onProgress(progress, 'Detection Agent - Warming up AI model');
-      }
-      logger.info('[ML_CLIENT] ML image model is loading; waiting before inference');
+      health = await response.json();
+    } catch (error) {
+      if (error.message.startsWith('ML service health check returned')) throw error;
+      lastHealthError = error;
+      mlServiceHealthy = false;
+      logger.warn(`[ML_CLIENT] ML service is not ready yet: ${error.message}`);
     } finally {
       clearTimeout(timeoutId);
     }
 
+    if (health) {
+      if (health.model_status === 'failed') {
+        throw new Error(health.model_error || 'ML image model failed to load');
+      }
+      if (!['healthy', 'ok', 'warming_up'].includes(health.status)) {
+        throw new Error(health.message || 'ML service is unhealthy');
+      }
+      mlServiceHealthy = true;
+      if (!health.model_status || health.model_status === 'loaded') return;
+      logger.info('[ML_CLIENT] ML image model is loading; waiting before inference');
+    }
+
+    const progress = Math.min(
+      60,
+      50 + Math.floor(((Date.now() - startedAt) / mlConfig.warmupTimeout) * 10)
+    );
+    if (onProgress && progress > lastReportedProgress) {
+      lastReportedProgress = progress;
+      onProgress(
+        progress,
+        health ? 'Detection Agent - Warming up AI model' : 'Detection Agent - Waking up ML service'
+      );
+    }
+
+    if (Date.now() >= deadline) break;
     await new Promise((resolve) => setTimeout(resolve, mlConfig.warmupPollInterval));
   }
 
-  throw new Error(`ML model did not become ready within ${mlConfig.warmupTimeout}ms`);
+  const reason = lastHealthError ? `: ${lastHealthError.message}` : '';
+  throw new Error(`ML service/model did not become ready within ${mlConfig.warmupTimeout}ms${reason}`);
 };
 
 /**
@@ -159,14 +178,6 @@ export const stopHealthChecks = () => {
 export const callMLService = async (perceptionData, onProgress) => {
   if (!isMLServiceEnabled()) {
     throw new Error('ML service is disabled');
-  }
-
-  if (!mlServiceHealthy) {
-    // Try one more health check before failing
-    const isHealthy = await checkMLServiceHealth();
-    if (!isHealthy) {
-      throw new Error('ML service is not available');
-    }
   }
 
   await waitForModelReady(onProgress);

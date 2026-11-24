@@ -31,11 +31,19 @@ describe('ML media payload helpers', () => {
       enabled: process.env.ML_SERVICE_ENABLED,
       url: process.env.ML_SERVICE_URL,
       maxFrames: process.env.ML_MAX_INFERENCE_FRAMES,
+      warmupPollInterval: process.env.ML_MODEL_WARMUP_POLL_INTERVAL,
     };
     const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ml-client-test-'));
     const received = [];
+    let healthChecks = 0;
     const server = http.createServer(async (request, response) => {
       if (request.url === '/health') {
+        healthChecks += 1;
+        if (healthChecks === 1) {
+          response.writeHead(503);
+          response.end('Service is waking');
+          return;
+        }
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ status: 'healthy', model_status: 'loaded' }));
         return;
@@ -65,6 +73,7 @@ describe('ML media payload helpers', () => {
       process.env.ML_SERVICE_ENABLED = 'true';
       process.env.ML_SERVICE_URL = `http://127.0.0.1:${address.port}`;
       process.env.ML_MAX_INFERENCE_FRAMES = '2';
+      process.env.ML_MODEL_WARMUP_POLL_INTERVAL = '1';
 
       const { callMLService } = await import('../src/ml/ml-client.js');
       const result = await callMLService({
@@ -75,6 +84,7 @@ describe('ML media payload helpers', () => {
       });
 
       expect(result.riskScore).toBe(78);
+      expect(healthChecks).toBe(2);
       expect(received).toHaveLength(1);
       expect(received[0].contentType).toContain('multipart/form-data; boundary=');
       expect(received[0].body).toContain('"mediaType":"VIDEO"');
@@ -93,6 +103,8 @@ describe('ML media payload helpers', () => {
       else process.env.ML_SERVICE_URL = previousEnv.url;
       if (previousEnv.maxFrames === undefined) delete process.env.ML_MAX_INFERENCE_FRAMES;
       else process.env.ML_MAX_INFERENCE_FRAMES = previousEnv.maxFrames;
+      if (previousEnv.warmupPollInterval === undefined) delete process.env.ML_MODEL_WARMUP_POLL_INTERVAL;
+      else process.env.ML_MODEL_WARMUP_POLL_INTERVAL = previousEnv.warmupPollInterval;
     }
   });
 });

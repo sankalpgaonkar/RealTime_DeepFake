@@ -17,10 +17,8 @@ jest.unstable_mockModule('../../../src/utils/logger.js', () => ({
 
 // Mock ML client
 const mockCallMLService = jest.fn();
-const mockCheckMLServiceHealth = jest.fn();
 jest.unstable_mockModule('../../../src/ml/ml-client.js', () => ({
     callMLService: mockCallMLService,
-    checkMLServiceHealth: mockCheckMLServiceHealth,
 }));
 
 // Mock ML config
@@ -33,7 +31,7 @@ jest.unstable_mockModule('../../../src/config/ml.config.js', () => ({
 }));
 
 const { detectDeepfake, aggregatePredictions } = await import('../../../src/agents/detection.agent.js');
-const { callMLService, checkMLServiceHealth } = await import('../../../src/ml/ml-client.js');
+const { callMLService } = await import('../../../src/ml/ml-client.js');
 
 describe('Detection Agent', () => {
     beforeEach(() => {
@@ -102,12 +100,10 @@ describe('Detection Agent', () => {
                 modelVersion: 'v1'
             };
 
-            checkMLServiceHealth.mockResolvedValue(true);
             callMLService.mockResolvedValue(mockMLResults);
 
             const result = await detectDeepfake(mockPerceptionData);
 
-            expect(checkMLServiceHealth).toHaveBeenCalled();
             expect(callMLService).toHaveBeenCalledWith(mockPerceptionData);
             expect(result).toEqual(mockMLResults);
         });
@@ -119,7 +115,6 @@ describe('Detection Agent', () => {
                 extractedFrames: ['/path/to/frame1.jpg']
             };
             const onProgress = jest.fn();
-            checkMLServiceHealth.mockResolvedValue(true);
             callMLService.mockImplementation(async (_data, reportProgress) => {
                 reportProgress(60, 'Detection Agent - Running ML inference');
                 return { riskScore: 50 };
@@ -131,16 +126,5 @@ describe('Detection Agent', () => {
             expect(onProgress).toHaveBeenCalledWith(60, 'Detection Agent - Running ML inference');
         });
 
-        test('should throw error if ML service is unhealthy', async () => {
-            checkMLServiceHealth.mockResolvedValue(false);
-
-            const mockPerceptionData = {
-                hash: 'test-hash',
-                mediaType: 'VIDEO',
-                extractedFrames: ['/path/to/frame1.jpg']
-            };
-
-            await expect(detectDeepfake(mockPerceptionData)).rejects.toThrow('ML service is not healthy');
-        });
     });
 });
