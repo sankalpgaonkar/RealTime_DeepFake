@@ -38,8 +38,7 @@ export function getApiBaseUrl(): string {
     if (raw.includes(".")) {
       return `https://${raw}/api`;
     }
-    const hostWithPort = raw.includes(":") ? raw : `${raw}:10000`;
-    return `http://${hostWithPort}/api`;
+    return `https://${raw}.onrender.com/api`;
   }
   if (process.env.BACKEND_URL) {
     return `${process.env.BACKEND_URL.replace(/\/$/, "")}/api`;

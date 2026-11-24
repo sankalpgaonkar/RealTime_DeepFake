@@ -19,6 +19,10 @@ function getBackendCandidates(): string[] {
       candidates.push(`https://${trimmed}`);
       candidates.push(`http://${trimmed}`);
     } else {
+      // On Render, a service host without a dot (e.g. veritrace-backend-u235) maps to its public HTTPS domain!
+      candidates.push(`https://${trimmed}.onrender.com`);
+      candidates.push(`http://${trimmed}.onrender.com`);
+
       // Private network hostname (e.g. veritrace-backend or veritrace-backend:10000)
       if (trimmed.includes(":")) {
         candidates.push(`http://${trimmed}`);
@@ -30,7 +34,10 @@ function getBackendCandidates(): string[] {
     }
   };
 
-  // 1. Explicit Render blueprint or environment variable host
+  // 1. Explicit verified Render public endpoints
+  candidates.push("https://veritrace-backend-u235.onrender.com");
+
+  // 2. Explicit Render blueprint or environment variable host
   addCandidate(process.env.BACKEND_HOST);
   addCandidate(process.env.BACKEND_URL);
 
