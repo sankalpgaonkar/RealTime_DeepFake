@@ -73,14 +73,16 @@ services:
     runtime: python
     rootDir: ml-service
     plan: free
-    # Install CPU-only PyTorch first (saves ~600MB vs default CUDA build),
+    # Install CPU-only PyTorch first (saves ~600MB vs default CUDA build) with NumPy < 2.0.0,
     # then install remaining dependencies with all their sub-dependencies.
-    buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu torchvision==0.16.2+cpu && pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 app:app
+    buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu torchvision==0.16.2+cpu "numpy>=1.24.0,<2.0.0" && pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 300 app:app
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: PORT
+        value: 10000
       - key: ML_ENV
         value: production
       # Disable the audio model (wav2vec2, ~500MB) on Render free tier to avoid OOM

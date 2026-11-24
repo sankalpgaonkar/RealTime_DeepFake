@@ -110,18 +110,21 @@ def load_model_on_startup():
     image_thread = threading.Thread(target=_preload_image, daemon=True, name='image-model-loader')
     image_thread.start()
 
-    # Pre-warm audio model in the background too.
-    def _preload_audio():
-        try:
-            logger.info('[ML_SERVICE] Pre-loading audio model in background thread...')
-            load_audio_model()
-            logger.info('[ML_SERVICE] Audio model pre-loaded successfully')
-        except Exception as e:
-            logger.warning(f'[ML_SERVICE] Background audio model load failed: {str(e)} — will retry lazily on first use')
+    # Pre-warm audio model in the background too (if not explicitly disabled).
+    if os.environ.get('DISABLE_AUDIO_MODEL', '').lower() in ('true', '1', 'yes'):
+        logger.info('[ML_SERVICE] Audio model loading skipped (DISABLE_AUDIO_MODEL=true)')
+    else:
+        def _preload_audio():
+            try:
+                logger.info('[ML_SERVICE] Pre-loading audio model in background thread...')
+                load_audio_model()
+                logger.info('[ML_SERVICE] Audio model pre-loaded successfully')
+            except Exception as e:
+                logger.warning(f'[ML_SERVICE] Background audio model load failed: {str(e)} — will retry lazily on first use')
 
-    audio_thread = threading.Thread(target=_preload_audio, daemon=True, name='audio-model-loader')
-    audio_thread.start()
-    logger.info('[ML_SERVICE] Audio model loading in background thread (non-blocking)')
+        audio_thread = threading.Thread(target=_preload_audio, daemon=True, name='audio-model-loader')
+        audio_thread.start()
+        logger.info('[ML_SERVICE] Audio model loading in background thread (non-blocking)')
 
 
 def extract_fake_probability(result):
@@ -543,15 +546,16 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint - returns HTTP 200 immediately to confirm server port is alive"""
     model_info = get_model_info()
+    loaded = _model_loaded or is_model_loaded()
     return jsonify({
-        'status': 'healthy' if _model_loaded else 'unhealthy',
+        'status': 'healthy' if loaded else 'warming_up',
         'service': 'deepfake-detection-ml-service',
         'version': '4.1.0',
         # Image model info
         'model': model_info['model'],
-        'model_status': 'loaded' if _model_loaded else 'not_loaded',
+        'model_status': 'loaded' if loaded else 'warming_up',
         'accuracy': model_info['accuracy'],
         'architecture': model_info['architecture'],
         'device': model_info['device'],
@@ -561,7 +565,7 @@ def health_check():
         'audio_accuracy': model_info.get('audio_accuracy'),
         'audio_processing_available': is_audio_processing_available(),
         'timestamp': datetime.utcnow().isoformat()
-    }), 200 if _model_loaded else 503
+    }), 200
 
 
 @app.route('/api/v1/inference', methods=['POST'])
@@ -580,11 +584,19 @@ def inference():
                 'message': 'Request body must be JSON'
             }), 400
 
-        if not _model_loaded:
-            return jsonify({
-                'error': 'Service Unavailable',
-                'message': 'Model is not loaded'
-            }), 503
+        global _model_loaded
+        if not _model_loaded and not is_model_loaded():
+            try:
+                logger.info('[ML_SERVICE] Model not pre-loaded, loading on demand...')
+                load_model()
+                _model_loaded = True
+            except Exception as e:
+                return jsonify({
+                    'error': 'Service Unavailable',
+                    'message': f'Model is warming up: {str(e)}'
+                }), 503
+        else:
+            _model_loaded = True
 
         hash_value = data.get('hash', '')
         media_type = data.get('mediaType', 'UNKNOWN')

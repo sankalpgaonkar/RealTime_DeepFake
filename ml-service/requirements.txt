@@ -16,8 +16,8 @@ torchvision>=0.15.0
 # Image processing
 Pillow>=10.0.0
 
-# Scientific computing
-numpy>=1.24.0
+# Scientific computing (pinned <2.0.0 for PyTorch 2.1 C API compatibility)
+numpy>=1.24.0,<2.0.0
 
 # Media processing (headless build: no GUI deps, smaller install)
 opencv-python-headless>=4.8.0
