@@ -1,25 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Fallback candidate target URLs for backend API
+// Dynamic candidate target URLs for backend API
 function getBackendCandidates(): string[] {
   const candidates: string[] = [];
 
+  const addCandidate = (raw?: string) => {
+    if (!raw) return;
+    const trimmed = raw.trim().replace(/\/$/, "");
+    if (!trimmed) return;
+
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      candidates.push(trimmed);
+      return;
+    }
+
+    // If it's a domain name (contains a dot like .onrender.com)
+    if (trimmed.includes(".")) {
+      candidates.push(`https://${trimmed}`);
+      candidates.push(`http://${trimmed}`);
+    } else {
+      // Private network hostname (e.g. veritrace-backend or veritrace-backend:10000)
+      if (trimmed.includes(":")) {
+        candidates.push(`http://${trimmed}`);
+      } else {
+        candidates.push(`http://${trimmed}:10000`);
+        candidates.push(`http://${trimmed}:3001`);
+        candidates.push(`http://${trimmed}`);
+      }
+    }
+  };
+
   // 1. Explicit Render blueprint or environment variable host
-  if (process.env.BACKEND_HOST) {
-    candidates.push(`https://${process.env.BACKEND_HOST}`);
+  addCandidate(process.env.BACKEND_HOST);
+  addCandidate(process.env.BACKEND_URL);
+
+  if (process.env.BACKEND_HOST && process.env.BACKEND_PORT) {
+    candidates.push(`http://${process.env.BACKEND_HOST.trim()}:${process.env.BACKEND_PORT.trim()}`);
   }
-  if (process.env.BACKEND_URL) {
-    candidates.push(process.env.BACKEND_URL.replace(/\/$/, ""));
-  }
+
   if (
     process.env.NEXT_PUBLIC_API_URL &&
     !process.env.NEXT_PUBLIC_API_URL.includes("localhost")
   ) {
-    candidates.push(process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, ""));
+    addCandidate(process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, ""));
   }
 
   // 2. Render private networking within same workspace/blueprint
   candidates.push("http://veritrace-backend:10000");
+  candidates.push("http://veritrace-backend");
 
   // 3. Known Render public endpoints
   candidates.push("https://veritrace-backend.onrender.com");
@@ -53,6 +81,21 @@ async function proxyRequest(
     });
   }
 
+  // Quick diagnostics check without proxying
+  if (path === "proxy-health") {
+    return NextResponse.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      env: {
+        BACKEND_HOST: process.env.BACKEND_HOST || null,
+        BACKEND_PORT: process.env.BACKEND_PORT || null,
+        BACKEND_URL: process.env.BACKEND_URL || null,
+        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || null,
+      },
+      candidates: getBackendCandidates(),
+    });
+  }
+
   const candidateUrls = getBackendCandidates();
   let lastError: Error | null = null;
 
@@ -67,10 +110,10 @@ async function proxyRequest(
   }
 
   for (const baseUrl of candidateUrls) {
-    const targetUrl = `${baseUrl}/api/${path}${query}`;
+    const targetUrl = path ? `${baseUrl}/api/${path}${query}` : `${baseUrl}/api${query}`;
     const isRenderPublicUrl = baseUrl.includes("onrender.com");
-    const attemptDeadline =
-      isRenderPublicUrl ? Date.now() + 50000 : Date.now() + 8000;
+    // Shorter deadline so users don't hang if a URL is invalid
+    const attemptDeadline = isRenderPublicUrl ? Date.now() + 20000 : Date.now() + 4000;
 
     while (Date.now() < attemptDeadline) {
       try {
@@ -89,7 +132,7 @@ async function proxyRequest(
         const controller = new AbortController();
         const timeoutId = setTimeout(
           () => controller.abort(),
-          isRenderPublicUrl ? 15000 : 6000
+          isRenderPublicUrl ? 10000 : 3500
         );
 
         const response = await fetch(targetUrl, {
@@ -101,18 +144,21 @@ async function proxyRequest(
         });
         clearTimeout(timeoutId);
 
-        const contentType = response.headers.get("content-type") || "";
+        // Only retry if Render specifically gives a 502/503/504 cold-start response
         if (
-          (response.status === 502 ||
-            response.status === 503 ||
-            response.status === 504 ||
-            (response.status === 404 &&
-              contentType.includes("text/html"))) &&
+          (response.status === 502 || response.status === 503 || response.status === 504) &&
           isRenderPublicUrl
         ) {
           lastError = new Error(`Backend returned HTTP ${response.status}`);
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           continue;
+        }
+
+        // If the candidate returns 404 HTML (e.g. an incorrect service host on Render), skip to next candidate
+        const contentType = response.headers.get("content-type") || "";
+        if (response.status === 404 && contentType.includes("text/html")) {
+          lastError = new Error(`Candidate ${baseUrl} returned 404 HTML`);
+          break; // Try next candidate immediately
         }
 
         const responseBody = await response.arrayBuffer();
@@ -132,12 +178,12 @@ async function proxyRequest(
       } catch (err: any) {
         lastError = err;
         if (!isRenderPublicUrl) break;
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
   }
 
-  // All candidates failed or timed out (typical during Render free-tier cold starts)
+  // All candidates failed or timed out
   return NextResponse.json(
     {
       error: "Backend Unavailable",

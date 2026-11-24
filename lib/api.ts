@@ -31,7 +31,15 @@ export function getApiBaseUrl(): string {
   }
 
   if (process.env.BACKEND_HOST) {
-    return `https://${process.env.BACKEND_HOST}/api`;
+    const raw = process.env.BACKEND_HOST.trim().replace(/\/$/, "");
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return `${raw}/api`;
+    }
+    if (raw.includes(".")) {
+      return `https://${raw}/api`;
+    }
+    const hostWithPort = raw.includes(":") ? raw : `${raw}:10000`;
+    return `http://${hostWithPort}/api`;
   }
   if (process.env.BACKEND_URL) {
     return `${process.env.BACKEND_URL.replace(/\/$/, "")}/api`;
