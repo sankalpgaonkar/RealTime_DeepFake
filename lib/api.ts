@@ -1234,8 +1234,8 @@ export const apiService = {
   },
 }
 
-// Legacy export for backward compatibility
-export const SentinelAPI = {
+// Legacy exports for backward compatibility
+export const VeriTraceAPI = {
   async runAnalysis(mediaData: any): Promise<ScanResult> {
     // This is now handled by the backend, but we keep this for compatibility
     throw new Error(
@@ -1248,3 +1248,4 @@ export const SentinelAPI = {
     return response.data || []
   },
 }
+export const SentinelAPI = VeriTraceAPI;

@@ -42,7 +42,7 @@ export function TacticalShell({
           <div className="w-8 h-8 bg-primary/20 border border-primary/40 flex items-center justify-center rounded-sm">
             <Shield className="w-5 h-5 text-primary animate-pulse" />
           </div>
-          <span className="hidden md:block font-bold text-lg tracking-tighter text-primary">SENTINEL-X</span>
+          <span className="hidden md:block font-bold text-lg tracking-tighter text-primary">VERITRACE-X</span>
         </div>
 
         <nav className="flex-1 py-4 flex flex-col gap-2 px-2">
@@ -128,7 +128,7 @@ export function TacticalShell({
           </div>
           <div className="flex gap-4">
             <span>SIG_INT: ACTIVE</span>
-            <span>© 2025 SENTINEL_DEFENSE</span>
+            <span>© 2025 VERITRACE_DEFENSE</span>
           </div>
         </footer>
       </main>

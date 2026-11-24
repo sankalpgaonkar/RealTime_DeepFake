@@ -10,7 +10,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
-  title: "SENTINEL | Agentic Deepfake Detection",
+  title: "VERITRACE | Agentic Deepfake Detection",
   description: "Mission-critical authenticity verification platform.",
   generator: "v0.app",
   icons: {

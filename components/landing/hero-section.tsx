@@ -82,7 +82,7 @@ export function HeroSection() {
             </div>
           </div>
           <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-[oklch(0.62_0.12_40)] uppercase italic leading-none">
-            SENTINEL-X
+            VERITRACE-X
           </h1>
         </div>
 
