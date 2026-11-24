@@ -130,11 +130,14 @@ async function proxyRequest(
           if (
             lowerKey !== "host" &&
             lowerKey !== "connection" &&
-            lowerKey !== "content-length"
+            lowerKey !== "content-length" &&
+            lowerKey !== "accept-encoding"
           ) {
             headers.set(key, value);
           }
         });
+        // Request uncompressed response to prevent header mismatch
+        headers.set("accept-encoding", "identity");
 
         const controller = new AbortController();
         const timeoutId = setTimeout(
@@ -172,7 +175,14 @@ async function proxyRequest(
         const resHeaders = new Headers();
         response.headers.forEach((value, key) => {
           const lowerKey = key.toLowerCase();
-          if (lowerKey !== "transfer-encoding") {
+          // Never forward hop-by-hop or encoding headers when returning decompressed arrayBuffer
+          if (
+            lowerKey !== "transfer-encoding" &&
+            lowerKey !== "content-encoding" &&
+            lowerKey !== "content-length" &&
+            lowerKey !== "connection" &&
+            lowerKey !== "keep-alive"
+          ) {
             resHeaders.set(key, value);
           }
         });
