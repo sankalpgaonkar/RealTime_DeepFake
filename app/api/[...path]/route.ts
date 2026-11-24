@@ -68,59 +68,72 @@ async function proxyRequest(
 
   for (const baseUrl of candidateUrls) {
     const targetUrl = `${baseUrl}/api/${path}${query}`;
-    try {
-      const headers = new Headers();
-      req.headers.forEach((value, key) => {
-        const lowerKey = key.toLowerCase();
+    const isRenderPublicUrl = baseUrl.includes("onrender.com");
+    const attemptDeadline =
+      isRenderPublicUrl ? Date.now() + 50000 : Date.now() + 8000;
+
+    while (Date.now() < attemptDeadline) {
+      try {
+        const headers = new Headers();
+        req.headers.forEach((value, key) => {
+          const lowerKey = key.toLowerCase();
+          if (
+            lowerKey !== "host" &&
+            lowerKey !== "connection" &&
+            lowerKey !== "content-length"
+          ) {
+            headers.set(key, value);
+          }
+        });
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          isRenderPublicUrl ? 15000 : 6000
+        );
+
+        const response = await fetch(targetUrl, {
+          method: req.method,
+          headers,
+          body: bodyBuffer,
+          signal: controller.signal,
+          redirect: "follow",
+        });
+        clearTimeout(timeoutId);
+
+        const contentType = response.headers.get("content-type") || "";
         if (
-          lowerKey !== "host" &&
-          lowerKey !== "connection" &&
-          lowerKey !== "content-length"
+          (response.status === 502 ||
+            response.status === 503 ||
+            response.status === 504 ||
+            (response.status === 404 &&
+              contentType.includes("text/html"))) &&
+          isRenderPublicUrl
         ) {
-          headers.set(key, value);
+          lastError = new Error(`Backend returned HTTP ${response.status}`);
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          continue;
         }
-      });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout per candidate
+        const responseBody = await response.arrayBuffer();
+        const resHeaders = new Headers();
+        response.headers.forEach((value, key) => {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey !== "transfer-encoding") {
+            resHeaders.set(key, value);
+          }
+        });
 
-      const response = await fetch(targetUrl, {
-        method: req.method,
-        headers,
-        body: bodyBuffer,
-        signal: controller.signal,
-        redirect: "follow",
-      });
-      clearTimeout(timeoutId);
-
-      // If response is 404 HTML (e.g. bogus server), skip and try next candidate
-      const contentType = response.headers.get("content-type") || "";
-      if (
-        response.status === 404 &&
-        contentType.includes("text/html") &&
-        baseUrl.includes("veritrace-backend.onrender.com")
-      ) {
-        continue;
+        return new NextResponse(responseBody, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: resHeaders,
+        });
+      } catch (err: any) {
+        lastError = err;
+        if (!isRenderPublicUrl) break;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
-
-      // Valid response received from backend
-      const responseBody = await response.arrayBuffer();
-      const resHeaders = new Headers();
-      response.headers.forEach((value, key) => {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey !== "transfer-encoding") {
-          resHeaders.set(key, value);
-        }
-      });
-
-      return new NextResponse(responseBody, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: resHeaders,
-      });
-    } catch (err: any) {
-      lastError = err;
-      continue;
     }
   }
 

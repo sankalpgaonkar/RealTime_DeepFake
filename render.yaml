@@ -52,7 +52,7 @@ services:
       - key: ENCRYPTION_IV
         generateValue: true
       - key: MONGODB_URI
-        value: mongodb+srv://sankalpgaonkar23_db_user:sankalp23@clusterdeepfake.0az4rg1.mongodb.net/deepfake-detection?retryWrites=true&w=majority
+        sync: false
       - key: DB_NAME
         value: deepfake-detection
       - key: ML_SERVICE_URL

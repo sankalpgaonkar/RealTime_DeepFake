@@ -24,7 +24,7 @@ Render provides Infrastructure-as-Code via the included [`render.yaml`](../rende
 4. **Enter Environment Variables**:
    - Under `veritrace-backend`, paste your **MongoDB Atlas Connection URI**:
      ```text
-     mongodb+srv://sankalpgaonkar23_db_user:<password>@clusterdeepfake.0az4rg1.mongodb.net/deepfake-detection?retryWrites=true&w=majority
+     mongodb+srv://<username>:<password>@<cluster-host>/deepfake-detection?retryWrites=true&w=majority
      ```
    - All other secrets (`JWT_SECRET`, `ENCRYPTION_KEY`, `ENCRYPTION_IV`) are generated automatically by Render.
 5. **Click "Apply"**:
