@@ -104,7 +104,7 @@ def load_model_on_startup():
     # Keep Gunicorn startup fast. Render health checks remain available while models
     # are downloaded in a daemon thread instead of blocking process initialization.
     def _preload_image():
-        global _model_loaded
+        global _model_loaded, _model_status, _model_load_error
         try:
             logger.info('[ML_SERVICE] Loading image model in background thread...')
             load_model()
@@ -559,13 +559,15 @@ def index():
 def health_check():
     """Health check endpoint - returns HTTP 200 immediately to confirm server port is alive"""
     model_info = get_model_info()
+    loaded = is_model_loaded()
+    current_model_status = 'loaded' if loaded else _model_status
     return jsonify({
         'status': 'unhealthy' if _model_status == 'failed' else 'healthy',
         'service': 'deepfake-detection-ml-service',
         'version': '4.1.0',
         # Image model info
         'model': model_info['model'],
-        'model_status': _model_status,
+        'model_status': current_model_status,
         'model_error': _model_load_error,
         'accuracy': model_info['accuracy'],
         'architecture': model_info['architecture'],
