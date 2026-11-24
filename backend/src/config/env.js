@@ -58,7 +58,9 @@ const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   },
   admin: {
-    email: process.env.ADMIN_EMAIL || '',
+    email: process.env.ADMIN_EMAIL || 'sankalpgaonkar23@gmail.com',
+    defaultPassword: process.env.ADMIN_PASSWORD || 'Admin@123',
+    operativeId: process.env.ADMIN_OPERATIVE_ID || 'ADMIN_1',
   },
   frontend: {
     url: (() => {

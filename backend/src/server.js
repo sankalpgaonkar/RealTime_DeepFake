@@ -118,6 +118,13 @@ const startServer = async () => {
       logger.info('Connecting to database...');
       try {
         await connectDB();
+        // Ensure primary admin account exists and is synchronized
+        try {
+          const { bootstrapDefaultAdmin } = await import('./users/user.service.js');
+          await bootstrapDefaultAdmin();
+        } catch (bootstrapError) {
+          logger.warn('[SERVER] Admin bootstrap failed on startup:', bootstrapError.message);
+        }
       } catch (dbError) {
         logger.error('Initial MongoDB connection error (server will continue running and retry):', dbError.message);
       }

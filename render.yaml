@@ -54,6 +54,10 @@ services:
         sync: false
       - key: DB_NAME
         value: deepfake-detection
+      - key: ADMIN_EMAIL
+        value: sankalpgaonkar23@gmail.com
+      - key: ADMIN_PASSWORD
+        value: Admin@123
       - key: ML_SERVICE_URL
         fromService:
           type: web

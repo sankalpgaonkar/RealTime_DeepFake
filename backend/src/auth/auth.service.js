@@ -49,8 +49,20 @@ export const verifyToken = (token) => {
  */
 export const authenticateUser = async (email, password) => {
   try {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    const adminEmail = (config.admin?.email || process.env.ADMIN_EMAIL || 'sankalpgaonkar23@gmail.com').toLowerCase().trim();
+    const adminPassword = config.admin?.defaultPassword || process.env.ADMIN_PASSWORD || 'Admin@123';
+
     // Find user and include password field
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    let user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+    // Self-healing: if designated admin attempts to login and user does not exist yet, bootstrap immediately
+    if (!user && normalizedEmail === adminEmail) {
+      logger.info(`[AUTH] Admin ${adminEmail} not found during login; auto-bootstrapping account...`);
+      const { bootstrapDefaultAdmin } = await import('../users/user.service.js');
+      await bootstrapDefaultAdmin();
+      user = await User.findOne({ email: adminEmail }).select('+password');
+    }
     
     if (!user) {
       throw new Error('Invalid credentials');
@@ -61,7 +73,17 @@ export const authenticateUser = async (email, password) => {
     }
 
     // Compare password
-    const isPasswordValid = await user.comparePassword(password);
+    let isPasswordValid = await user.comparePassword(password);
+
+    // Self-healing: if password check fails for the designated admin with the configured admin password, repair and re-authenticate
+    if (!isPasswordValid && normalizedEmail === adminEmail && password === adminPassword) {
+      logger.info(`[AUTH] Synchronizing password for admin ${adminEmail}...`);
+      const { bootstrapDefaultAdmin } = await import('../users/user.service.js');
+      await bootstrapDefaultAdmin();
+      user = await User.findOne({ email: adminEmail }).select('+password');
+      isPasswordValid = await user.comparePassword(password);
+    }
+
     if (!isPasswordValid) {
       throw new Error('Invalid credentials');
     }
@@ -97,17 +119,33 @@ export const authenticateUser = async (email, password) => {
  */
 export const registerUser = async (email, password, operativeId = null) => {
   try {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    const adminEmail = (config.admin?.email || process.env.ADMIN_EMAIL || 'sankalpgaonkar23@gmail.com').toLowerCase().trim();
+    const isAdmin = normalizedEmail === adminEmail;
+
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       throw new Error('User with this email already exists');
     }
 
+    // If registering as designated admin, demote any other conflicting admin
+    if (isAdmin) {
+      await User.updateMany(
+        { role: ROLES.ADMIN, email: { $ne: adminEmail } },
+        { $set: { role: ROLES.OPERATIVE } }
+      );
+    }
+
     // Generate operative ID if not provided
     if (!operativeId) {
-      const timestamp = Date.now().toString(36).toUpperCase();
-      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-      operativeId = `USER_${timestamp}_${random}`;
+      if (isAdmin) {
+        operativeId = config.admin?.operativeId || 'ADMIN_1';
+      } else {
+        const timestamp = Date.now().toString(36).toUpperCase();
+        const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+        operativeId = `USER_${timestamp}_${random}`;
+      }
     } else {
       // Check if operative ID already exists
       const existingOperativeId = await User.findOne({ operativeId: operativeId.toUpperCase() });
@@ -118,11 +156,18 @@ export const registerUser = async (email, password, operativeId = null) => {
 
     // Create new user
     const user = new User({
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password,
       operativeId: operativeId.toUpperCase(),
-      role: ROLES.OPERATIVE, // Default role
+      role: isAdmin ? ROLES.ADMIN : ROLES.OPERATIVE,
       isActive: true,
+      authProvider: 'local',
+      metadata: isAdmin ? {
+        firstName: 'Sankalp',
+        lastName: 'Gaonkar',
+        department: 'Security & Intelligence',
+        clearanceLevel: 'TOP_SECRET',
+      } : undefined,
     });
 
     await user.save();

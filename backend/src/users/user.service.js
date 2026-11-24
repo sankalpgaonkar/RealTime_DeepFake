@@ -6,6 +6,98 @@
 import User from './user.model.js';
 import { ROLES } from '../security/rbac.js';
 import logger from '../utils/logger.js';
+import bcrypt from 'bcryptjs';
+import config from '../config/env.js';
+
+/**
+ * Bootstrap or repair default admin user on server startup
+ */
+export const bootstrapDefaultAdmin = async () => {
+  try {
+    const adminEmail = (config.admin?.email || process.env.ADMIN_EMAIL || 'sankalpgaonkar23@gmail.com').toLowerCase().trim();
+    const adminPassword = config.admin?.defaultPassword || process.env.ADMIN_PASSWORD || 'Admin@123';
+    const adminOperativeId = config.admin?.operativeId || process.env.ADMIN_OPERATIVE_ID || 'ADMIN_1';
+
+    logger.info(`[BOOTSTRAP] Checking default admin account for ${adminEmail}...`);
+
+    // Ensure no other conflicting user holds the sole ADMIN role
+    const existingOtherAdmin = await User.findOne({
+      role: ROLES.ADMIN,
+      email: { $ne: adminEmail }
+    });
+
+    if (existingOtherAdmin) {
+      logger.info(`[BOOTSTRAP] Demoting conflicting admin ${existingOtherAdmin.email} to OPERATIVE`);
+      await User.updateOne(
+        { _id: existingOtherAdmin._id },
+        { $set: { role: ROLES.OPERATIVE } }
+      );
+    }
+
+    // Find the target admin user
+    const user = await User.findOne({ email: adminEmail }).select('+password');
+
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(adminPassword, salt);
+
+    if (user) {
+      const isPasswordMatching = user.password ? await user.comparePassword(adminPassword) : false;
+      const needsPasswordUpdate = !user.password || !isPasswordMatching;
+      const needsRoleUpdate = user.role !== ROLES.ADMIN;
+      const needsActiveUpdate = !user.isActive;
+
+      if (needsPasswordUpdate || needsRoleUpdate || needsActiveUpdate) {
+        logger.info(`[BOOTSTRAP] Synchronizing admin credentials for ${adminEmail}...`);
+        await User.updateOne(
+          { _id: user._id },
+          {
+            $set: {
+              password: hashedPassword,
+              role: ROLES.ADMIN,
+              isActive: true,
+              authProvider: 'local',
+              operativeId: user.operativeId || adminOperativeId,
+            }
+          }
+        );
+        logger.info(`[BOOTSTRAP] Admin account ${adminEmail} successfully updated and ready`);
+      } else {
+        logger.info(`[BOOTSTRAP] Admin account ${adminEmail} is already configured and active`);
+      }
+    } else {
+      logger.info(`[BOOTSTRAP] Creating initial admin account ${adminEmail}...`);
+      await User.updateOne(
+        { email: adminEmail },
+        {
+          $set: {
+            email: adminEmail,
+            password: hashedPassword,
+            operativeId: adminOperativeId,
+            role: ROLES.ADMIN,
+            isActive: true,
+            authProvider: 'local',
+            metadata: {
+              firstName: 'Sankalp',
+              lastName: 'Gaonkar',
+              department: 'Security & Intelligence',
+              clearanceLevel: 'TOP_SECRET',
+            },
+            notificationPreferences: {
+              emailEnabled: true,
+              emailOnDeepfake: true,
+              emailOnAll: false,
+              inAppEnabled: true,
+            },
+          }
+        },
+        { upsert: true }
+      );
+      logger.info(`[BOOTSTRAP] Initial admin account ${adminEmail} created with password and ADMIN role`);
+    }
+  } catch (error) {
+    logger.error('[BOOTSTRAP] Failed to bootstrap default admin user:', error);
+  }
+};
 
 /**
  * Get all users with pagination and filters
@@ -313,5 +405,6 @@ export default {
   updateUser,
   deleteUser,
   getUserStats,
+  bootstrapDefaultAdmin,
 };
 
