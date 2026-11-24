@@ -53,7 +53,7 @@ export function CTASection() {
 
         {/* Footer note */}
         <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] font-mono text-muted-foreground/50 uppercase tracking-widest">
-          <span>VERITRACE-X v4.1.0</span>
+          <span>SENTINEL-X v4.1.0</span>
           <span className="text-[oklch(0.62_0.12_40)]/20">·</span>
           <span>AES-256 ENCRYPTED</span>
           <span className="text-[oklch(0.62_0.12_40)]/20">·</span>
