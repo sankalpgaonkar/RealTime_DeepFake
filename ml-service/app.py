@@ -94,17 +94,23 @@ def load_model_on_startup():
     import threading
     global _model_loaded
 
-    # Load image model synchronously (required for health-check to pass)
-    try:
-        logger.info('[ML_SERVICE] Loading image model on startup...')
-        load_model()
-        _model_loaded = True
-        logger.info('[ML_SERVICE] Image model loaded successfully')
-    except Exception as e:
-        logger.error(f'[ML_SERVICE] Failed to load image model: {str(e)}', exc_info=True)
-        _model_loaded = False
+    # Keep Gunicorn startup fast. Render health checks remain available while models
+    # are downloaded in a daemon thread instead of blocking process initialization.
+    def _preload_image():
+        global _model_loaded
+        try:
+            logger.info('[ML_SERVICE] Loading image model in background thread...')
+            load_model()
+            _model_loaded = True
+            logger.info('[ML_SERVICE] Image model loaded successfully')
+        except Exception as e:
+            logger.error(f'[ML_SERVICE] Failed to load image model: {str(e)}', exc_info=True)
+            _model_loaded = False
 
-    # Pre-warm audio model in the background so it is ready before the first video request
+    image_thread = threading.Thread(target=_preload_image, daemon=True, name='image-model-loader')
+    image_thread.start()
+
+    # Pre-warm audio model in the background too.
     def _preload_audio():
         try:
             logger.info('[ML_SERVICE] Pre-loading audio model in background thread...')

@@ -6,7 +6,6 @@
 # 1. veritrace-frontend : Next.js tactical web UI
 # 2. veritrace-backend  : Node.js Express & Socket.IO orchestration API
 # 3. veritrace-ml       : Python PyTorch & Vision Transformer inference microservice
-# 4. veritrace-redis    : Managed Redis cache & queue (Internal network)
 # ==============================================================================
 
 services:
@@ -74,6 +73,8 @@ services:
     runtime: python
     rootDir: ml-service
     plan: free
+    # Install CPU-only PyTorch first (saves ~600MB vs default CUDA build),
+    # then install remaining deps without overwriting torch.
     buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu torchvision==0.16.2+cpu && pip install -r requirements.txt --no-deps torch torchvision || pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 app:app
     healthCheckPath: /health
@@ -82,10 +83,12 @@ services:
         value: 3.11.9
       - key: ML_ENV
         value: production
+      # Disable the audio model (wav2vec2, ~500MB) on Render free tier to avoid OOM
       - key: DISABLE_AUDIO_MODEL
         value: "true"
       - key: HF_HUB_DISABLE_SYMLINKS_WARNING
         value: "1"
+      # Use /tmp for model cache (Render ephemeral disk)
       - key: TRANSFORMERS_CACHE
         value: /tmp/hf_cache
       - key: HF_HOME

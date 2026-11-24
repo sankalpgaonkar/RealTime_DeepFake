@@ -3,10 +3,12 @@ flask>=2.3.0
 flask-cors>=4.0.0
 
 # Hugging Face Transformers for model inference
-transformers>=4.36.0
+# Pin to a known-good version for stability
+transformers==4.51.3
 
 # PyTorch (CPU-only build to reduce install size on Render free tier)
-# On Render free tier, use --extra-index-url for torch CPU builds
+# Installed separately via buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu
+# Listing here as fallback in case the extra-index-url step is skipped
 torch>=2.0.0
 torchvision>=0.15.0
 
@@ -16,8 +18,7 @@ Pillow>=10.0.0
 # Scientific computing
 numpy>=1.24.0
 
-# Media processing (for video frame extraction)
-# Using headless build to skip GUI dependencies (smaller install)
+# Media processing (headless build: no GUI deps, smaller install)
 opencv-python-headless>=4.8.0
 
 # Utilities
@@ -28,7 +29,7 @@ datasets>=2.14.0
 scikit-learn>=1.3.0
 accelerate>=0.24.0
 
-# Audio processing for deepfake detection (optional)
+# Audio processing for deepfake detection (optional - disabled on Render via DISABLE_AUDIO_MODEL)
 librosa>=0.10.0
 soundfile>=0.12.0
 
