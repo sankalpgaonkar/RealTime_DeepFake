@@ -11,14 +11,14 @@ import logger from '../src/utils/logger.js';
 const users = [
   {
     email: 'sankalpgaonkar23@gmail.com',
-    // No password - Google Auth only
+    password: 'Admin@123',
     operativeId: 'ADMIN_1',
     role: ROLES.ADMIN,
-    authProvider: 'google',
+    authProvider: 'local',
     metadata: {
-      firstName: 'System',
-      lastName: 'Administrator',
-      department: 'IT',
+      firstName: 'Sankalp',
+      lastName: 'Gaonkar',
+      department: 'Security & Intelligence',
       clearanceLevel: 'TOP_SECRET',
     },
   },

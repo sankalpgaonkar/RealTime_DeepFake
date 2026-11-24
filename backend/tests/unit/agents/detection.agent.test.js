@@ -6,7 +6,7 @@
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 
 // Mock logger
-jest.mock('../../../src/utils/logger.js', () => ({
+jest.unstable_mockModule('../../../src/utils/logger.js', () => ({
     default: {
         info: jest.fn(),
         error: jest.fn(),
@@ -16,13 +16,24 @@ jest.mock('../../../src/utils/logger.js', () => ({
 }));
 
 // Mock ML client
-jest.mock('../../../src/ml/ml-client.js', () => ({
-    callMLService: jest.fn(),
-    checkMLServiceHealth: jest.fn(),
+const mockCallMLService = jest.fn();
+const mockCheckMLServiceHealth = jest.fn();
+jest.unstable_mockModule('../../../src/ml/ml-client.js', () => ({
+    callMLService: mockCallMLService,
+    checkMLServiceHealth: mockCheckMLServiceHealth,
 }));
 
-import { detectDeepfake, aggregatePredictions } from '../../../src/agents/detection.agent.js';
-import { callMLService, checkMLServiceHealth } from '../../../src/ml/ml-client.js';
+// Mock ML config
+jest.unstable_mockModule('../../../src/config/ml.config.js', () => ({
+    isMLServiceEnabled: jest.fn(() => true),
+    getHealthCheckUrl: jest.fn(),
+    getInferenceUrl: jest.fn(),
+    getMLConfig: jest.fn(() => ({ enabled: true })),
+    default: { enabled: true },
+}));
+
+const { detectDeepfake, aggregatePredictions } = await import('../../../src/agents/detection.agent.js');
+const { callMLService, checkMLServiceHealth } = await import('../../../src/ml/ml-client.js');
 
 describe('Detection Agent', () => {
     beforeEach(() => {

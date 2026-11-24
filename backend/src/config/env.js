@@ -58,7 +58,9 @@ const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   },
   admin: {
-    email: process.env.ADMIN_EMAIL || '',
+    email: process.env.ADMIN_EMAIL || 'sankalpgaonkar23@gmail.com',
+    defaultPassword: process.env.ADMIN_PASSWORD || 'Admin@123',
+    operativeId: process.env.ADMIN_OPERATIVE_ID || 'ADMIN_1',
   },
   frontend: {
     url: (() => {
@@ -72,12 +74,23 @@ const config = {
   ml: {
     serviceUrl: (() => {
       const raw = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001';
-      if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-      return raw.includes('.onrender.com') ? `https://${raw}` : `http://${raw}`;
+      let url = raw;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (url.includes('.onrender.com')) {
+          url = `https://${url}`;
+        } else if (!url.includes(':') && !url.includes('.')) {
+          url = `https://${url}.onrender.com`;
+        } else {
+          url = `http://${url}`;
+        }
+      } else if (url.startsWith('http://') && url.includes('veritrace-ml') && !url.includes('.onrender.com') && !url.includes(':')) {
+        url = 'https://veritrace-ml.onrender.com';
+      }
+      return url;
     })(),
     enabled: process.env.ML_SERVICE_ENABLED !== 'false',
-    timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10),
-    retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
+    timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '180000', 10),
+    retries: parseInt(process.env.ML_SERVICE_RETRIES || '2', 10),
     modelVersion: process.env.ML_MODEL_VERSION || 'v4',
   },
   email: {

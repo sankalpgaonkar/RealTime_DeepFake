@@ -3,9 +3,9 @@
  * HTTP client for communicating with external ML service (Python Flask/FastAPI)
  */
 
+import fs from 'fs';
 import mlConfig, { getHealthCheckUrl, getInferenceUrl, isMLServiceEnabled } from '../config/ml.config.js';
 import logger from '../utils/logger.js';
-import fs from 'fs';
 import path from 'path';
 import { getMediaContentType, selectInferenceFrames } from './media-payload.js';
 
@@ -42,10 +42,10 @@ export const checkMLServiceHealth = async () => {
 
     if (response.ok) {
       const data = await response.json();
-      mlServiceHealthy = data.status === 'healthy' || data.status === 'ok';
+      mlServiceHealthy = data.status === 'healthy' || data.status === 'ok' || data.status === 'warming_up' || data.service === 'deepfake-detection-ml-service';
 
       if (mlServiceHealthy) {
-        logger.debug('[ML_CLIENT] ML service is healthy');
+        logger.debug('[ML_CLIENT] ML service is healthy or warming up');
       } else {
         logger.warn('[ML_CLIENT] ML service health check returned unhealthy status');
       }

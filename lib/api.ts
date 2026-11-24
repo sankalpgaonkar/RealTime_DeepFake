@@ -31,7 +31,14 @@ export function getApiBaseUrl(): string {
   }
 
   if (process.env.BACKEND_HOST) {
-    return `https://${process.env.BACKEND_HOST}/api`;
+    const raw = process.env.BACKEND_HOST.trim().replace(/\/$/, "");
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return `${raw}/api`;
+    }
+    if (raw.includes(".")) {
+      return `https://${raw}/api`;
+    }
+    return `https://${raw}.onrender.com/api`;
   }
   if (process.env.BACKEND_URL) {
     return `${process.env.BACKEND_URL.replace(/\/$/, "")}/api`;
@@ -1234,8 +1241,8 @@ export const apiService = {
   },
 }
 
-// Legacy export for backward compatibility
-export const SentinelAPI = {
+// Legacy exports for backward compatibility
+export const VeriTraceAPI = {
   async runAnalysis(mediaData: any): Promise<ScanResult> {
     // This is now handled by the backend, but we keep this for compatibility
     throw new Error(
@@ -1248,3 +1255,4 @@ export const SentinelAPI = {
     return response.data || []
   },
 }
+export const SentinelAPI = VeriTraceAPI;

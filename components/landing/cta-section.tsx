@@ -59,7 +59,7 @@ export function CTASection() {
           <span className="text-[oklch(0.62_0.12_40)]/20">·</span>
           <span>SiglIP + wav2vec2</span>
           <span className="text-[oklch(0.62_0.12_40)]/20">·</span>
-          <span>© 2025 SENTINEL_DEFENSE</span>
+          <span>© 2025 VERITRACE_DEFENSE</span>
         </div>
       </div>
     </section>

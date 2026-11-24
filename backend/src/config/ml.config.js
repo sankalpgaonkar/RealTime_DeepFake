@@ -10,14 +10,28 @@ const mlConfig = {
   // ML Service URL (Python Flask/FastAPI service)
   serviceUrl: (() => {
     const raw = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001';
-    return (raw.startsWith('http://') || raw.startsWith('https://')) ? raw : `http://${raw}`;
+    let url = raw;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (url.includes('.onrender.com')) {
+        url = `https://${url}`;
+      } else if (!url.includes(':') && !url.includes('.')) {
+        // Render service name slug (e.g. 'veritrace-ml') on public domain
+        url = `https://${url}.onrender.com`;
+      } else {
+        url = `http://${url}`;
+      }
+    } else if (url.startsWith('http://') && url.includes('veritrace-ml') && !url.includes('.onrender.com') && !url.includes(':')) {
+      // If Render set ML_SERVICE_URL to 'http://veritrace-ml' (private DNS that fails on free tier)
+      url = 'https://veritrace-ml.onrender.com';
+    }
+    return url;
   })(),
   
   // ML Service Configuration
   enabled: process.env.ML_SERVICE_ENABLED !== 'false', // Default to enabled if env var not set
-  timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '120000', 10),
-  retries: parseInt(process.env.ML_SERVICE_RETRIES || '3', 10),
-  retryDelay: parseInt(process.env.ML_SERVICE_RETRY_DELAY || '1000', 10), // 1 second
+  timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '180000', 10),
+  retries: parseInt(process.env.ML_SERVICE_RETRIES || '2', 10),
+  retryDelay: parseInt(process.env.ML_SERVICE_RETRY_DELAY || '2000', 10),
   warmupTimeout: parseInt(process.env.ML_MODEL_WARMUP_TIMEOUT || '300000', 10),
   warmupPollInterval: parseInt(process.env.ML_MODEL_WARMUP_POLL_INTERVAL || '5000', 10),
   maxInferenceFrames: parseInt(process.env.ML_MAX_INFERENCE_FRAMES || '24', 10),

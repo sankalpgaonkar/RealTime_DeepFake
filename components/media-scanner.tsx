@@ -475,7 +475,7 @@ export function MediaScanner({ onScanResult }: { onScanResult?: (result: ScanRes
                 <MessageSquare size={14} />
                 Cognitive_Analysis_Report
               </h3>
-              <div className="text-[10px] font-mono text-muted-foreground">REF: SENTINEL_COGNITIVE_V2</div>
+              <div className="text-[10px] font-mono text-muted-foreground">REF: VERITRACE_COGNITIVE_V2</div>
             </div>
 
             <div className="space-y-3">

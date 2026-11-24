@@ -92,7 +92,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      const responseText = await response.text()
+      let data: any
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("Failed to parse response JSON:", parseError, responseText)
+        throw new Error("Invalid response received from server. Please retry.")
+      }
 
       if (data.success && data.data) {
         const { user: userData, token: authToken } = data.data
@@ -107,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Redirect to dashboard
         router.push("/dashboard")
       } else {
-        throw new Error("Invalid response format")
+        throw new Error(data.message || "Invalid response format")
       }
     } catch (error) {
       console.error("Login error:", error)
@@ -145,7 +152,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      const responseText = await response.text()
+      let data: any
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("Failed to parse response JSON:", parseError, responseText)
+        throw new Error("Invalid response received from server. Please retry.")
+      }
 
       if (data.success && data.data) {
         const { user: userData, token: authToken } = data.data
@@ -160,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Redirect to dashboard
         router.push("/dashboard")
       } else {
-        throw new Error("Invalid response format")
+        throw new Error(data.message || "Invalid response format")
       }
     } catch (error) {
       console.error("Google login error:", error)
@@ -199,7 +213,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      const responseText = await response.text()
+      let data: any
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("Failed to parse response JSON:", parseError, responseText)
+        throw new Error("Invalid response received from server. Please retry.")
+      }
 
       if (data.success && data.data) {
         const { user: userData, token: authToken } = data.data
@@ -214,7 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Redirect to dashboard
         router.push("/dashboard")
       } else {
-        throw new Error("Invalid response format")
+        throw new Error(data.message || "Invalid response format")
       }
     } catch (error) {
       console.error("Signup error:", error)

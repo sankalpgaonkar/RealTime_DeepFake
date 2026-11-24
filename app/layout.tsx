@@ -1,9 +1,13 @@
 import type React from "react"
 import type { Metadata } from "next"
+import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/contexts/auth-context"
 import { GoogleScriptLoader } from "@/components/google-script-loader"
 import "./globals.css"
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 export const metadata: Metadata = {
   title: "VERITRACE | Agentic Deepfake Detection",
@@ -38,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <GoogleScriptLoader clientId={googleClientId} />
-      <body className="font-sans antialiased bg-background text-foreground">
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased bg-background text-foreground`}>
         <AuthProvider>
           <div className="relative min-h-screen flex flex-col border-x border-primary/10 max-w-[1920px] mx-auto overflow-hidden">
             {children}

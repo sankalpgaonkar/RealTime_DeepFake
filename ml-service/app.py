@@ -12,6 +12,9 @@ This service:
 """
 
 import os
+import io
+import base64
+import tempfile
 import time
 import json
 import shutil
@@ -118,7 +121,11 @@ def load_model_on_startup():
     image_thread = threading.Thread(target=_preload_image, daemon=True, name='image-model-loader')
     image_thread.start()
 
-    logger.info('[ML_SERVICE] Audio model will load on the first audio inference request')
+    # Keep audio inference disabled on memory-constrained Render free instances.
+    if os.environ.get('DISABLE_AUDIO_MODEL', '').lower() in ('true', '1', 'yes'):
+        logger.info('[ML_SERVICE] Audio model loading skipped (DISABLE_AUDIO_MODEL=true)')
+    else:
+        logger.info('[ML_SERVICE] Audio model will load on the first audio inference request')
 
 
 def extract_fake_probability(result):
@@ -540,10 +547,10 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint - returns HTTP 200 immediately to confirm server port is alive"""
     model_info = get_model_info()
     return jsonify({
-        'status': 'healthy' if _model_loaded else 'unhealthy',
+        'status': 'unhealthy' if _model_status == 'failed' else 'healthy',
         'service': 'deepfake-detection-ml-service',
         'version': '4.1.0',
         # Image model info
@@ -559,7 +566,7 @@ def health_check():
         'audio_accuracy': model_info.get('audio_accuracy'),
         'audio_processing_available': is_audio_processing_available(),
         'timestamp': datetime.utcnow().isoformat()
-    }), 503 if _model_status == 'failed' else 200
+    }), 200
 
 
 @app.route('/api/v1/inference', methods=['POST'])
@@ -606,11 +613,19 @@ def inference():
                 'message': 'Request body must contain a JSON object'
             }), 400
 
-        if not _model_loaded:
-            return jsonify({
-                'error': 'Service Unavailable',
-                'message': 'Model is not loaded'
-            }), 503
+        global _model_loaded
+        if not _model_loaded and not is_model_loaded():
+            try:
+                logger.info('[ML_SERVICE] Model not pre-loaded, loading on demand...')
+                load_model()
+                _model_loaded = True
+            except Exception as e:
+                return jsonify({
+                    'error': 'Service Unavailable',
+                    'message': f'Model is warming up: {str(e)}'
+                }), 503
+        else:
+            _model_loaded = True
 
         hash_value = data.get('hash', '')
         media_type = data.get('mediaType', 'UNKNOWN')
@@ -618,6 +633,43 @@ def inference():
         if request.mimetype != 'multipart/form-data':
             extracted_frames = data.get('extractedFrames', [])
             extracted_audio = data.get('extractedAudio', None)
+
+        # Handle base64 frames/audio from remote containers (cross-service without shared disk)
+        frames_base64 = data.get('framesBase64', [])
+        audio_base64 = data.get('audioBase64', None)
+        temp_files_to_clean = []
+
+        if frames_base64 and isinstance(frames_base64, list):
+            logger.info(f'[ML_SERVICE] Received {len(frames_base64)} base64 frames from caller')
+            decoded_paths = []
+            for idx, b64 in enumerate(frames_base64):
+                try:
+                    if ',' in b64:
+                        b64 = b64.split(',', 1)[1]
+                    img_bytes = base64.b64decode(b64)
+                    suffix = '.jpg'
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix=f'frame_{idx}_')
+                    tmp.write(img_bytes)
+                    tmp.close()
+                    decoded_paths.append(tmp.name)
+                    temp_files_to_clean.append(tmp.name)
+                except Exception as b64_err:
+                    logger.warn(f'[ML_SERVICE] Failed to decode base64 frame {idx}: {b64_err}')
+            if decoded_paths:
+                extracted_frames = decoded_paths
+
+        if audio_base64 and isinstance(audio_base64, str):
+            logger.info('[ML_SERVICE] Received base64 audio from caller')
+            try:
+                b64_audio = audio_base64.split(',', 1)[1] if ',' in audio_base64 else audio_base64
+                audio_bytes = base64.b64decode(b64_audio)
+                tmp_audio = tempfile.NamedTemporaryFile(delete=False, suffix='.wav', prefix='audio_')
+                tmp_audio.write(audio_bytes)
+                tmp_audio.close()
+                extracted_audio = tmp_audio.name
+                temp_files_to_clean.append(tmp_audio.name)
+            except Exception as b64_audio_err:
+                logger.warn(f'[ML_SERVICE] Failed to decode base64 audio: {b64_audio_err}')
 
         # max_frames: caller (perception agent) sends how many frames it extracted.
         # We respect that value but clamp to our service ceiling (INFERENCE_CONFIG['max_frames']).
@@ -805,6 +857,13 @@ def inference():
             response['warning'] = 'No human faces detected. Facial authenticity verification requires a clearly visible face.'
 
         logger.info(f'[ML_SERVICE] Inference complete: risk_score={response["risk_score"]}, confidence={response["confidence"]}, faces={faces_detected}/{total_frames}, time={inference_time}ms')
+
+        for tmp_f in temp_files_to_clean:
+            try:
+                if os.path.exists(tmp_f):
+                    os.unlink(tmp_f)
+            except Exception:
+                pass
 
         return jsonify(response), 200
 

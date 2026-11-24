@@ -45,11 +45,17 @@ const setAdmin = async () => {
       // Update existing user to admin
       logger.info(`Updating existing user to admin: ${ADMIN_EMAIL}`);
 
+      // Update password to Admin@123
+      const bcrypt = (await import('bcryptjs')).default;
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash('Admin@123', salt);
+
       const updateData = {
         $set: {
           role: ROLES.ADMIN,
-          authProvider: 'google',
+          authProvider: 'local',
           isActive: true,
+          password: hashedPassword,
         }
       };
 
@@ -60,29 +66,34 @@ const setAdmin = async () => {
         logger.info(`Operative ID 'ADMIN_1' is already in use. Keeping current operative ID: ${targetUser.operativeId}`);
       }
 
-      // Remove password if it exists (for Google Auth)
-      if (targetUser.password) {
-        updateData.$unset = { password: "" };
-      }
-
       await User.updateOne(
         { _id: targetUser._id },
         updateData
       );
 
-      logger.info(`Updated user to admin: ${ADMIN_EMAIL}`);
+      logger.info(`Updated user to admin with password Admin@123: ${ADMIN_EMAIL}`);
     } else {
       // Create new user as admin
       logger.info(`Creating new admin user: ${ADMIN_EMAIL}`);
 
+      const bcrypt = (await import('bcryptjs')).default;
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash('Admin@123', salt);
+
       const userData = {
         email: ADMIN_EMAIL.toLowerCase(),
+        password: hashedPassword,
         operativeId: existingAdminId ? `ADMIN_${Date.now()}` : 'ADMIN_1',
         role: ROLES.ADMIN,
-        authProvider: 'google',
+        authProvider: 'local',
         isActive: true,
         metadata: {
-          firstName: 'System',
+          firstName: 'Sankalp',
+          lastName: 'Gaonkar',
+          department: 'Security & Intelligence',
+          clearanceLevel: 'TOP_SECRET',
+        },
+      };
           lastName: 'Administrator',
           department: 'IT',
           clearanceLevel: 'TOP_SECRET',

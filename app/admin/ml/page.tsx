@@ -127,7 +127,7 @@ export default function MLConfigPage() {
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground mb-4">
-            <span className="text-primary">SENTINEL_X</span>
+            <span className="text-primary">VERITRACE_X</span>
             <span>/</span>
             <span>ADMIN_PANEL</span>
             <span>/</span>

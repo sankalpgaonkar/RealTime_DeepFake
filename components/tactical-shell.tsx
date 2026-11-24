@@ -128,7 +128,7 @@ export function TacticalShell({
           </div>
           <div className="flex gap-4">
             <span>SIG_INT: ACTIVE</span>
-            <span>© 2025 SENTINEL_DEFENSE</span>
+            <span>© 2025 VERITRACE_DEFENSE</span>
           </div>
         </footer>
       </main>
