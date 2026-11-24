@@ -125,6 +125,16 @@ const startServer = async () => {
         } catch (bootstrapError) {
           logger.warn('[SERVER] Admin bootstrap failed on startup:', bootstrapError.message);
         }
+
+        // Clean up any scans previously abandoned in PROCESSING state
+        try {
+          const { cleanupStuckScans } = await import('./scans/scan.service.js');
+          if (cleanupStuckScans) {
+            await cleanupStuckScans();
+          }
+        } catch (cleanupError) {
+          logger.debug('[SERVER] Cleanup stuck scans check:', cleanupError.message);
+        }
       } catch (dbError) {
         logger.error('Initial MongoDB connection error (server will continue running and retry):', dbError.message);
       }
@@ -204,20 +214,12 @@ const startServer = async () => {
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Promise Rejection:', err);
-  // Do not crash server in development on transient promise rejections
-  if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
+  logger.error('Unhandled Promise Rejection:', err?.message || err);
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
-  // Log and exit safely if it is a truly unrecoverable fatal error
-  if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
+  logger.error('Uncaught Exception:', err?.message || err);
 });
 
 // Start the server

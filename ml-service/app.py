@@ -104,7 +104,7 @@ def load_model_on_startup():
     # Keep Gunicorn startup fast. Render health checks remain available while models
     # are downloaded in a daemon thread instead of blocking process initialization.
     def _preload_image():
-        global _model_loaded
+        global _model_loaded, _model_status, _model_load_error
         try:
             logger.info('[ML_SERVICE] Loading image model in background thread...')
             load_model()
@@ -232,46 +232,56 @@ def run_audio_inference(audio_data):
 def run_inference(pipeline, images):
     """
     Run inference on preprocessed images using pipeline
+    Processed one-by-one under torch.no_grad() to keep memory under 512MB RAM on cloud containers.
 
     Args:
         pipeline: Loaded pipeline
         images: List of PIL Images or single PIL Image
 
     Returns:
-        List of predictions with probabilities
+        tuple: (fake_probs, results)
     """
+    import gc
+    import torch
+
+    if not isinstance(images, list):
+        images = [images]
+
+    results = []
+    fake_probs = []
+
     try:
-        # Run inference
-        raw_results = pipeline(images)
+        with torch.no_grad():
+            for img in images:
+                # Resize if larger than 512x512 to prevent large tensor allocations
+                # SigLIP processes at 224x224; large image dimensions only inflate intermediate tensors
+                if isinstance(img, Image.Image):
+                    if img.width > 512 or img.height > 512:
+                        img_to_run = img.copy()
+                        img_to_run.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                    else:
+                        img_to_run = img
+                else:
+                    img_to_run = img
 
-        # Normalize results to list of predictions
-        # Each prediction is a list of {label, score} dicts
-        results = []
+                raw = pipeline(img_to_run)
 
-        if isinstance(raw_results, dict):
-            # Single dict result
-            results = [[raw_results]]
-        elif isinstance(raw_results, list) and len(raw_results) > 0:
-            if isinstance(raw_results[0], dict) and 'label' in raw_results[0]:
-                # Single image result: [{'label': 'Real', 'score': 0.51}, {'label': 'Fake', 'score': 0.49}]
-                results = [raw_results]
-            elif isinstance(raw_results[0], list):
-                # Batch result: [[{...}, {...}], [{...}, {...}]]
-                results = raw_results
-            else:
-                # Unknown format, wrap it
-                results = [raw_results]
-        else:
-            # Empty or unknown, use default
-            results = [raw_results]
+                if isinstance(raw, list) and len(raw) > 0:
+                    results.append(raw)
+                    fake_probs.append(extract_fake_probability(raw))
+                elif isinstance(raw, dict):
+                    results.append([raw])
+                    fake_probs.append(extract_fake_probability([raw]))
+                else:
+                    results.append([raw])
+                    fake_probs.append(0.5)
 
-        # Extract fake probabilities - each result is a full prediction with all labels
-        fake_probs = [extract_fake_probability(result) for result in results]
-
-        return fake_probs, raw_results
+        gc.collect()
+        return fake_probs, results
 
     except Exception as e:
         logger.error(f'[ML_SERVICE] Model inference error: {str(e)}', exc_info=True)
+        gc.collect()
         raise
 
 
@@ -549,13 +559,15 @@ def index():
 def health_check():
     """Health check endpoint - returns HTTP 200 immediately to confirm server port is alive"""
     model_info = get_model_info()
+    loaded = is_model_loaded()
+    current_model_status = 'loaded' if loaded else _model_status
     return jsonify({
         'status': 'unhealthy' if _model_status == 'failed' else 'healthy',
         'service': 'deepfake-detection-ml-service',
         'version': '4.1.0',
         # Image model info
         'model': model_info['model'],
-        'model_status': _model_status,
+        'model_status': current_model_status,
         'model_error': _model_load_error,
         'accuracy': model_info['accuracy'],
         'architecture': model_info['architecture'],
@@ -710,6 +722,8 @@ def inference():
 
             # Whole-image evaluation: evaluates global diffusion patterns, background rendering, and generative textures
             full_pil = Image.open(image_path).convert('RGB')
+            if full_pil.width > 768 or full_pil.height > 768:
+                full_pil.thumbnail((768, 768), Image.Resampling.LANCZOS)
             eval_images = [full_pil]
             if face_found and crops:
                 eval_images.extend(crops)
@@ -858,13 +872,6 @@ def inference():
 
         logger.info(f'[ML_SERVICE] Inference complete: risk_score={response["risk_score"]}, confidence={response["confidence"]}, faces={faces_detected}/{total_frames}, time={inference_time}ms')
 
-        for tmp_f in temp_files_to_clean:
-            try:
-                if os.path.exists(tmp_f):
-                    os.unlink(tmp_f)
-            except Exception:
-                pass
-
         return jsonify(response), 200
 
     except Exception as e:
@@ -874,6 +881,12 @@ def inference():
             'message': str(e)
         }), 500
     finally:
+        for tmp_f in temp_files_to_clean:
+            try:
+                if os.path.exists(tmp_f):
+                    os.unlink(tmp_f)
+            except Exception:
+                pass
         if inference_temp_dir:
             shutil.rmtree(inference_temp_dir, ignore_errors=True)
 

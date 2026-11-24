@@ -15,6 +15,18 @@ let cacheEnabled = false;
  */
 export const initializeCache = async () => {
   try {
+    const redisUrl = process.env.REDIS_URL || config.redis?.url || 'redis://localhost:6379';
+
+    // In production, if REDIS_URL is not set or points to localhost, skip immediately
+    if (process.env.NODE_ENV === 'production') {
+      if (!process.env.REDIS_URL || redisUrl.includes('localhost') || redisUrl.includes('127.0.0.1')) {
+        logger.info('[CACHE] Redis not configured for production. In-memory/no-op caching active.');
+        cacheEnabled = false;
+        redisClient = null;
+        return false;
+      }
+    }
+
     // Try to import ioredis
     let Redis;
     try {
@@ -27,46 +39,35 @@ export const initializeCache = async () => {
       return false;
     }
     
-    redisClient = new Redis(config.redis.url, {
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-      maxRetriesPerRequest: 3,
+    redisClient = new Redis(redisUrl, {
+      retryStrategy: () => null, // Stop reconnecting immediately if Redis is down
+      maxRetriesPerRequest: 1,
       enableReadyCheck: true,
-      lazyConnect: false,
-      connectTimeout: 5000,
+      lazyConnect: true,
+      connectTimeout: 2000,
+      enableOfflineQueue: false,
     });
     
     redisClient.on('error', (err) => {
-      logger.warn('[CACHE] Redis error:', err.message);
+      logger.debug('[CACHE] Redis event error:', err.message);
       cacheEnabled = false;
     });
 
-    redisClient.on('connect', () => {
-      logger.info('[CACHE] Redis connected');
-      cacheEnabled = true;
-    });
-
-    redisClient.on('ready', () => {
-      logger.info('[CACHE] Redis ready');
-      cacheEnabled = true;
-    });
-
     // Test connection with ping
+    await redisClient.connect();
     await redisClient.ping();
     cacheEnabled = true;
     logger.info('[CACHE] Cache system initialized');
     return true;
   } catch (error) {
     // Redis not available or connection failed - graceful fallback
-    logger.warn('[CACHE] Redis not available, caching disabled:', error.message);
+    logger.info(`[CACHE] Redis unavailable (${error.message}), caching disabled.`);
     cacheEnabled = false;
     if (redisClient) {
       try {
-        await redisClient.quit();
+        redisClient.disconnect();
       } catch (e) {
-        // Ignore quit errors
+        // Ignore disconnect errors
       }
       redisClient = null;
     }
