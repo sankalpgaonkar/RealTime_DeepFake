@@ -49,7 +49,9 @@ const calculateDynamicThresholds = async (perceptionData, detectionResults) => {
   // Adjust for media type
   // For images, single frames lack temporal continuity, so we maintain a robust threshold
   // rather than lowering it, preventing compression-induced false positives.
-  if (perceptionData.mediaType === 'VIDEO' && detectionResults.frameCount > 10) {
+  if (perceptionData.mediaType === 'IMAGE') {
+    deepfakeThreshold -= adj.imageDecrease;
+  } else if (perceptionData.mediaType === 'VIDEO' && detectionResults.frameCount > 10) {
     deepfakeThreshold -= adj.multiFrameDecrease;
   }
 

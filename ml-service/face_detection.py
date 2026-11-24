@@ -152,7 +152,7 @@ def _detect_face_yunet(image_rgb, detector, min_confidence=0.5):
     return None
 
 
-def _detect_face_dnn(image_rgb, net, confidence_threshold=0.3):
+def _detect_face_dnn(image_rgb, net, confidence_threshold=0.15):
     """Detect faces using OpenCV Caffe DNN detector"""
     h, w = image_rgb.shape[:2]
 

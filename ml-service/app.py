@@ -30,6 +30,7 @@ from trainer import start_training, get_training_status
 from dataset_builder import get_dataset_stats
 from preprocessing import preprocess_image, preprocess_image_multiscale, preprocess_frames
 from audio_preprocessing import preprocess_audio, is_audio_processing_available
+from detection_calibration import aggregate_image_probability, extract_fake_probability as calibrate_fake_probability
 
 app = Flask(__name__)
 CORS(app)
@@ -129,30 +130,7 @@ def extract_fake_probability(result):
         Float probability that the image is fake (0-1)
     """
     try:
-        if isinstance(result, list):
-            # Find the 'fake' label
-            for item in result:
-                label = item.get('label', '').lower()
-                score = item.get('score', 0.0)
-
-                if 'fake' in label or label == 'label_0':
-                    return score
-                elif 'real' in label or label == 'label_1':
-                    return 1.0 - score
-
-            # Fallback: use first result
-            if len(result) > 0:
-                top_result = result[0]
-                label = top_result.get('label', '').lower()
-                score = top_result.get('score', 0.5)
-
-                if 'fake' in label or label == 'label_0':
-                    return score
-                elif 'real' in label or label == 'label_1':
-                    return 1.0 - score
-
-        return 0.5
-
+        return calibrate_fake_probability(result)
     except Exception as e:
         logger.error(f'[ML_SERVICE] Error extracting fake probability: {str(e)}')
         return 0.5
@@ -351,36 +329,13 @@ def calculate_scores(fake_probs, media_type, frame_count=1, faces_detected=0, au
         if media_type == 'IMAGE':
             fake_probs_arr = np.array(fake_probs) if len(fake_probs) > 0 else np.array([])
             if image_crop_probs is not None and len(image_crop_probs) > 0:
-                crops_p90 = float(np.percentile(image_crop_probs, 90) * 100)
-                crops_max = float(np.max(image_crop_probs) * 100)
-                full_s = float(image_full_prob * 100) if image_full_prob is not None else crops_p90
-
-                # Adaptive Dual-Signal Decision Architecture:
-                # 1. Authentic Human Photo:
-                #    If all face crops across scales (10%, 25%, 50%) are solidly authentic (crops_max < 12%),
-                #    the facial features, skin pores, and blending are genuinely human.
-                #    In real portraits, complex clothing, jewelry, or busy backgrounds can cause
-                #    out-of-distribution noise on the full frame for models trained on cropped faces.
-                #    We do NOT let background noise override an undeniably authentic face.
-                if crops_max < 12.0:
-                    video_score = 0.90 * crops_p90 + 0.10 * min(full_s, 25.0)
-                    peak_risk = float(max(crops_max, video_score))
-                    mean_risk = float(video_score)
-                elif crops_p90 >= 40.0:
-                    # 2. Localized face-swap / high-confidence facial manipulation:
-                    video_score = max(crops_p90, full_s)
-                    peak_risk = float(max(crops_max, full_s))
-                    mean_risk = float(video_score)
-                elif full_s >= 65.0:
-                    # 3. Whole-canvas Generative AI (e.g. Midjourney / FLUX) with non-authentic crop cues:
-                    video_score = max(full_s, crops_p90)
-                    peak_risk = float(max(crops_max, full_s))
-                    mean_risk = float(video_score)
-                else:
-                    # 4. Intermediate zone: balanced combination
-                    video_score = 0.60 * crops_p90 + 0.40 * full_s
-                    peak_risk = float(max(crops_max, video_score))
-                    mean_risk = float(video_score)
+                image_scores = aggregate_image_probability(
+                    full_probability=image_full_prob if image_full_prob is not None else 0.0,
+                    crop_probabilities=image_crop_probs,
+                )
+                video_score = image_scores["risk_probability"] * 100
+                peak_risk = image_scores["peak_probability"] * 100
+                mean_risk = image_scores["mean_probability"] * 100
             elif len(fake_probs_arr) > 0:
                 video_score = float(fake_probs_arr[0] * 100)
                 peak_risk = video_score
