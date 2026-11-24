@@ -3,6 +3,7 @@
  * HTTP client for communicating with external ML service (Python Flask/FastAPI)
  */
 
+import fs from 'fs';
 import mlConfig, { getHealthCheckUrl, getInferenceUrl, isMLServiceEnabled } from '../config/ml.config.js';
 import logger from '../utils/logger.js';
 
@@ -36,10 +37,10 @@ export const checkMLServiceHealth = async () => {
 
     if (response.ok) {
       const data = await response.json();
-      mlServiceHealthy = data.status === 'healthy' || data.status === 'ok';
+      mlServiceHealthy = data.status === 'healthy' || data.status === 'ok' || data.status === 'warming_up' || data.service === 'deepfake-detection-ml-service';
 
       if (mlServiceHealthy) {
-        logger.debug('[ML_CLIENT] ML service is healthy');
+        logger.debug('[ML_CLIENT] ML service is healthy or warming up');
       } else {
         logger.warn('[ML_CLIENT] ML service health check returned unhealthy status');
       }
@@ -128,12 +129,41 @@ export const callMLService = async (perceptionData) => {
       const timeoutId = setTimeout(() => controller.abort(), mlConfig.timeout);
 
       // Prepare request payload
+      // Convert frames to base64 so inference succeeds even when services run in separate containers
+      const framesBase64 = [];
+      const extractedFrames = perceptionData.extractedFrames || [];
+      for (const framePath of extractedFrames.slice(0, 30)) {
+        try {
+          if (fs.existsSync(framePath)) {
+            const buf = fs.readFileSync(framePath);
+            framesBase64.push(buf.toString('base64'));
+          }
+        } catch (readErr) {
+          logger.warn(`[ML_CLIENT] Could not read frame to base64: ${framePath} (${readErr.message})`);
+        }
+      }
+
+      let audioBase64 = null;
+      if (perceptionData.extractedAudio && fs.existsSync(perceptionData.extractedAudio)) {
+        try {
+          const audioBuf = fs.readFileSync(perceptionData.extractedAudio);
+          // Keep within reasonable size (e.g. max 10MB)
+          if (audioBuf.length <= 10 * 1024 * 1024) {
+            audioBase64 = audioBuf.toString('base64');
+          }
+        } catch (audioReadErr) {
+          logger.warn(`[ML_CLIENT] Could not read audio to base64: ${audioReadErr.message}`);
+        }
+      }
+
       const payload = {
         hash: perceptionData.hash,
         mediaType: perceptionData.mediaType,
         metadata: perceptionData.metadata,
         extractedFrames: perceptionData.extractedFrames || [],
         extractedAudio: perceptionData.extractedAudio || null,
+        framesBase64,
+        audioBase64,
         modelVersion: mlConfig.modelVersion,
         // Tell the ML service how many frames the perception agent extracted so
         // it can dynamically set its processing ceiling (instead of hardcoding 30).

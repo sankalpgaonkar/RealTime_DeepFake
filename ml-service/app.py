@@ -12,6 +12,9 @@ This service:
 """
 
 import os
+import io
+import base64
+import tempfile
 import time
 import numpy as np
 from PIL import Image
@@ -604,6 +607,43 @@ def inference():
         extracted_frames = data.get('extractedFrames', [])
         extracted_audio = data.get('extractedAudio', None)
 
+        # Handle base64 frames/audio from remote containers (cross-service without shared disk)
+        frames_base64 = data.get('framesBase64', [])
+        audio_base64 = data.get('audioBase64', None)
+        temp_files_to_clean = []
+
+        if frames_base64 and isinstance(frames_base64, list):
+            logger.info(f'[ML_SERVICE] Received {len(frames_base64)} base64 frames from caller')
+            decoded_paths = []
+            for idx, b64 in enumerate(frames_base64):
+                try:
+                    if ',' in b64:
+                        b64 = b64.split(',', 1)[1]
+                    img_bytes = base64.b64decode(b64)
+                    suffix = '.jpg'
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix=f'frame_{idx}_')
+                    tmp.write(img_bytes)
+                    tmp.close()
+                    decoded_paths.append(tmp.name)
+                    temp_files_to_clean.append(tmp.name)
+                except Exception as b64_err:
+                    logger.warn(f'[ML_SERVICE] Failed to decode base64 frame {idx}: {b64_err}')
+            if decoded_paths:
+                extracted_frames = decoded_paths
+
+        if audio_base64 and isinstance(audio_base64, str):
+            logger.info('[ML_SERVICE] Received base64 audio from caller')
+            try:
+                b64_audio = audio_base64.split(',', 1)[1] if ',' in audio_base64 else audio_base64
+                audio_bytes = base64.b64decode(b64_audio)
+                tmp_audio = tempfile.NamedTemporaryFile(delete=False, suffix='.wav', prefix='audio_')
+                tmp_audio.write(audio_bytes)
+                tmp_audio.close()
+                extracted_audio = tmp_audio.name
+                temp_files_to_clean.append(tmp_audio.name)
+            except Exception as b64_audio_err:
+                logger.warn(f'[ML_SERVICE] Failed to decode base64 audio: {b64_audio_err}')
+
         # max_frames: caller (perception agent) sends how many frames it extracted.
         # We respect that value but clamp to our service ceiling (INFERENCE_CONFIG['max_frames']).
         # If the caller doesn't send it (None / absent), process all provided frames.
@@ -793,6 +833,13 @@ def inference():
             response['warning'] = 'No human faces detected. Facial authenticity verification requires a clearly visible face.'
 
         logger.info(f'[ML_SERVICE] Inference complete: risk_score={response["risk_score"]}, confidence={response["confidence"]}, faces={faces_detected}/{total_frames}, time={inference_time}ms')
+
+        for tmp_f in temp_files_to_clean:
+            try:
+                if os.path.exists(tmp_f):
+                    os.unlink(tmp_f)
+            except Exception:
+                pass
 
         return jsonify(response), 200
 

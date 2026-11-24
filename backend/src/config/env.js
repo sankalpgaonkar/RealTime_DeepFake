@@ -74,8 +74,19 @@ const config = {
   ml: {
     serviceUrl: (() => {
       const raw = process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001';
-      if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-      return raw.includes('.onrender.com') ? `https://${raw}` : `http://${raw}`;
+      let url = raw;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (url.includes('.onrender.com')) {
+          url = `https://${url}`;
+        } else if (!url.includes(':') && !url.includes('.')) {
+          url = `https://${url}.onrender.com`;
+        } else {
+          url = `http://${url}`;
+        }
+      } else if (url.startsWith('http://') && url.includes('veritrace-ml') && !url.includes('.onrender.com') && !url.includes(':')) {
+        url = 'https://veritrace-ml.onrender.com';
+      }
+      return url;
     })(),
     enabled: process.env.ML_SERVICE_ENABLED !== 'false',
     timeout: parseInt(process.env.ML_SERVICE_TIMEOUT || '30000', 10),
