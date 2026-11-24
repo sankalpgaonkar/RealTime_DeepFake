@@ -19,8 +19,6 @@ numpy>=1.24.0
 opencv-python>=4.8.0
 
 # Face detection
-mediapipe>=0.10.0
-
 # Utilities
 requests>=2.31.0
 
