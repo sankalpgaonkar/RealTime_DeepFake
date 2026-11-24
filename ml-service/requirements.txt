@@ -1,6 +1,7 @@
 # Flask web framework
 flask>=2.3.0
 flask-cors>=4.0.0
+werkzeug>=3.0.0
 
 # Hugging Face Transformers for model inference
 # Pin to a known-good version for stability

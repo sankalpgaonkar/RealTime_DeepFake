@@ -74,8 +74,8 @@ services:
     rootDir: ml-service
     plan: free
     # Install CPU-only PyTorch first (saves ~600MB vs default CUDA build),
-    # then install remaining deps without overwriting torch.
-    buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu torchvision==0.16.2+cpu && pip install -r requirements.txt --no-deps torch torchvision || pip install -r requirements.txt
+    # then install remaining dependencies with all their sub-dependencies.
+    buildCommand: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.2+cpu torchvision==0.16.2+cpu && pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 app:app
     healthCheckPath: /health
     envVars:

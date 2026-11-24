@@ -10,8 +10,7 @@ pip install --extra-index-url https://download.pytorch.org/whl/cpu \
     "torch==2.1.2+cpu" \
     "torchvision==0.16.2+cpu"
 
-echo "[BUILD] Installing remaining dependencies (excluding torch/torchvision)..."
-# Install everything else from requirements.txt, skipping torch/torchvision (already installed above)
-grep -v "^torch" requirements.txt | grep -v "^torchvision" | pip install -r /dev/stdin
+echo "[BUILD] Installing remaining dependencies..."
+pip install -r requirements.txt
 
 echo "[BUILD] Build complete!"
