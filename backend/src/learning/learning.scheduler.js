@@ -18,13 +18,22 @@ let _learningQueue = null;
  * Creates a Bull queue with an hourly repeatable job
  */
 export const initializeLearningScheduler = () => {
-  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
-    logger.warn('[LEARNING_SCHEDULER] REDIS_URL is not configured; learning scheduler disabled');
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  if (process.env.NODE_ENV === 'production' && (!process.env.REDIS_URL || redisUrl.includes('localhost') || redisUrl.includes('127.0.0.1'))) {
+    logger.info('[LEARNING_SCHEDULER] REDIS_URL not configured for production; learning scheduler disabled');
     return null;
   }
 
   try {
-    _learningQueue = new Queue('learning-cycle', REDIS_URL, {
+    _learningQueue = new Queue('learning-cycle', redisUrl, {
+      redis: {
+        maxRetriesPerRequest: 1,
+        retryStrategy: (times) => {
+          if (times > 3) return null; // Stop reconnecting after 3 attempts
+          return Math.min(times * 1000, 3000);
+        },
+        enableOfflineQueue: false,
+      },
       defaultJobOptions: {
         attempts: 1,
         removeOnComplete: { age: 7 * 24 * 3600, count: 100 },

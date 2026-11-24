@@ -16,13 +16,22 @@ const REDIS_URL = process.env.REDIS_URL || config.redis?.url || 'redis://localho
  * @returns {Queue} Bull queue instance
  */
 export const createScanQueue = () => {
-  if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
-    logger.warn('[QUEUE] REDIS_URL is not configured; scan queue disabled');
+  const redisUrl = process.env.REDIS_URL || config.redis?.url || 'redis://localhost:6379';
+  if (process.env.NODE_ENV === 'production' && (!process.env.REDIS_URL || redisUrl.includes('localhost') || redisUrl.includes('127.0.0.1'))) {
+    logger.info('[QUEUE] REDIS_URL is not configured for production; scan queue disabled (direct execution active)');
     return null;
   }
 
   try {
-    const scanQueue = new Queue('scan-processing', REDIS_URL, {
+    const scanQueue = new Queue('scan-processing', redisUrl, {
+      redis: {
+        maxRetriesPerRequest: 1,
+        retryStrategy: (times) => {
+          if (times > 3) return null; // Stop reconnecting after 3 attempts
+          return Math.min(times * 1000, 3000);
+        },
+        enableOfflineQueue: false,
+      },
       defaultJobOptions: {
         attempts: 3,
         backoff: {
