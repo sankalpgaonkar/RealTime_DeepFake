@@ -34,10 +34,7 @@ function getBackendCandidates(): string[] {
     }
   };
 
-  // 1. Explicit verified Render public endpoints
-  candidates.push("https://veritrace-backend-u235.onrender.com");
-
-  // 2. Explicit Render blueprint or environment variable host
+  // Prefer the active Render service configured by the blueprint.
   addCandidate(process.env.BACKEND_HOST);
   addCandidate(process.env.BACKEND_URL);
 
@@ -52,7 +49,10 @@ function getBackendCandidates(): string[] {
     addCandidate(process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, ""));
   }
 
-  // 2. Render private networking within same workspace/blueprint
+  // Fallbacks for older deployments and local development.
+  candidates.push("https://veritrace-backend-u235.onrender.com");
+
+  // Render private networking within same workspace/blueprint
   candidates.push("http://veritrace-backend:10000");
   candidates.push("http://veritrace-backend");
 
@@ -105,6 +105,7 @@ async function proxyRequest(
 
   const candidateUrls = getBackendCandidates();
   let lastError: Error | null = null;
+  const renderColdStartDeadline = Date.now() + 75_000;
 
   // Read request body once if needed
   let bodyBuffer: ArrayBuffer | undefined = undefined;
@@ -119,8 +120,10 @@ async function proxyRequest(
   for (const baseUrl of candidateUrls) {
     const targetUrl = path ? `${baseUrl}/api/${path}${query}` : `${baseUrl}/api${query}`;
     const isRenderPublicUrl = baseUrl.includes("onrender.com");
-    // Shorter deadline so users don't hang if a URL is invalid
-    const attemptDeadline = isRenderPublicUrl ? Date.now() + 20000 : Date.now() + 4000;
+    // Render free services can take about a minute to wake from sleep.
+    const attemptDeadline = isRenderPublicUrl
+      ? renderColdStartDeadline
+      : Date.now() + 4000;
 
     while (Date.now() < attemptDeadline) {
       try {
@@ -142,7 +145,7 @@ async function proxyRequest(
         const controller = new AbortController();
         const timeoutId = setTimeout(
           () => controller.abort(),
-          isRenderPublicUrl ? 10000 : 3500
+          isRenderPublicUrl ? 15000 : 3500
         );
 
         const response = await fetch(targetUrl, {
@@ -160,7 +163,7 @@ async function proxyRequest(
           isRenderPublicUrl
         ) {
           lastError = new Error(`Backend returned HTTP ${response.status}`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, Math.min(2000, Math.max(0, attemptDeadline - Date.now()))));
           continue;
         }
 
@@ -195,7 +198,7 @@ async function proxyRequest(
       } catch (err: any) {
         lastError = err;
         if (!isRenderPublicUrl) break;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, Math.min(2000, Math.max(0, attemptDeadline - Date.now()))));
       }
     }
   }
@@ -205,7 +208,7 @@ async function proxyRequest(
     {
       error: "Backend Unavailable",
       message:
-        "The backend service is currently waking up on Render free tier (cold starts take 30–50 seconds). Please wait a moment and try again.",
+        "The backend service is unavailable or still waking up on Render free tier. Waking can take about a minute; please try again if this message persists.",
       details: lastError?.message || "All backend connection candidates failed",
     },
     { status: 503 }
