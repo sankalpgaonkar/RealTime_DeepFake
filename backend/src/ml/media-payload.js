@@ -1,4 +1,4 @@
-const MAX_INFERENCE_FRAMES = 24;
+const MAX_INFERENCE_FRAMES = 8;
 
 export const selectInferenceFrames = (framePaths, maxFrames = MAX_INFERENCE_FRAMES) => {
   if (!Array.isArray(framePaths) || framePaths.length === 0) return [];

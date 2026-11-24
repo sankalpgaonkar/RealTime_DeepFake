@@ -31,6 +31,8 @@ Render provides Infrastructure-as-Code via the included [`render.yaml`](../rende
 
 The blueprint does not provision Redis. Without a `REDIS_URL`, individual scans still run and batch scans fall back to direct processing, while queued processing and the automatic learning scheduler are disabled. To enable those optional features, provision a Render Key Value instance and set the backend's `REDIS_URL` to its connection URL.
 
+On the free tier, the blueprint limits video inference to 8 evenly spaced frames and skips extracting video audio because the audio model is disabled to stay within memory limits. Increase `ML_MAX_INFERENCE_FRAMES` on the backend and `ML_MAX_FRAMES` on the ML service if you prefer more frame coverage over scan speed.
+
 ---
 
 ## 🛠️ Option 2: Manual Dashboard Setup (Free-Tier Friendly)

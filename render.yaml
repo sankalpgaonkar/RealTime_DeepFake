@@ -68,6 +68,10 @@ services:
           type: web
           name: veritrace-ml
           property: host
+      - key: ML_MAX_INFERENCE_FRAMES
+        value: "8"
+      - key: DISABLE_AUDIO_MODEL
+        value: "true"
       - key: FRONTEND_URL
         fromService:
           type: web
@@ -97,6 +101,8 @@ services:
       # Disable the audio model (wav2vec2, ~500MB) on Render free tier to avoid OOM
       - key: DISABLE_AUDIO_MODEL
         value: "true"
+      - key: ML_MAX_FRAMES
+        value: "8"
       - key: HF_HUB_DISABLE_SYMLINKS_WARNING
         value: "1"
       # Use /tmp for model cache (Render ephemeral disk)

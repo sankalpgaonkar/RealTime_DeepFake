@@ -136,7 +136,7 @@ export const processScan = async (scanId, filePath, userId = null) => {
     if (targetUserId) {
       emitScanUpdateToUser(targetUserId, scanId, { type: 'status', status: 'PROCESSING', progress: 25, stage: 'Perception Agent' });
     }
-    const perceptionData = await processMedia(filePath, scanId);
+    const perceptionData = await processMedia(filePath, scanId, scan.fileHash);
 
     // Step 2: Detection Agent
     logger.info(`[SCAN_SERVICE] Step 2/4: Detection Agent`);

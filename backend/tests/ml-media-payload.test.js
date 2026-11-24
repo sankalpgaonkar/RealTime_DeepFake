@@ -5,14 +5,14 @@ import http from 'http';
 import { getMediaContentType, selectInferenceFrames } from '../src/ml/media-payload.js';
 
 describe('ML media payload helpers', () => {
-  test('selects evenly distributed frames without exceeding the inference limit', () => {
+  test('selects eight evenly distributed frames by default', () => {
     const frames = Array.from({ length: 60 }, (_, index) => `frame-${index}`);
-    const selected = selectInferenceFrames(frames, 24);
+    const selected = selectInferenceFrames(frames);
 
-    expect(selected).toHaveLength(24);
+    expect(selected).toHaveLength(8);
     expect(selected[0]).toBe('frame-0');
     expect(selected.at(-1)).toBe('frame-59');
-    expect(new Set(selected).size).toBe(24);
+    expect(new Set(selected).size).toBe(8);
   });
 
   test('preserves all frames when already under the limit', () => {

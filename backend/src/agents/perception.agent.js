@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateFileHash } from '../security/encryption.js';
-import { extractFrames, extractSceneChangeFrames, extractAudio, getMediaMetadata, normalizeMedia, extractGPSFromImage } from '../utils/ffmpeg.js';
+import { extractFrames, extractAudio, getMediaMetadata, normalizeMedia, extractGPSFromImage } from '../utils/ffmpeg.js';
 import logger from '../utils/logger.js';
 import { getPerceptionParams } from '../learning/adaptive-perception.js';
 
@@ -18,16 +18,17 @@ const __dirname = path.dirname(__filename);
  * Process media file through perception agent
  * @param {string} filePath - Path to media file
  * @param {string} scanId - Unique scan ID
+ * @param {string} knownHash - Previously computed file hash
  * @returns {Promise<Object>} Perception results
  */
-export const processMedia = async (filePath, scanId) => {
+export const processMedia = async (filePath, scanId, knownHash) => {
   try {
     const absoluteFilePath = path.resolve(filePath);
     logger.info(`[PERCEPTION_AGENT] Starting perception processing for scan: ${scanId}`);
 
-    // Read file buffer for hashing
-    const fileBuffer = fs.readFileSync(filePath);
-    const hash = generateFileHash(fileBuffer);
+    // Reuse the upload hash when available to avoid reading large files twice.
+    const fileBuffer = knownHash ? null : fs.readFileSync(filePath);
+    const hash = knownHash || generateFileHash(fileBuffer);
 
     // Get media metadata
     let metadata;
@@ -39,12 +40,11 @@ export const processMedia = async (filePath, scanId) => {
         format: {
           format_name: path.extname(filePath).slice(1),
           duration: 0,
-          size: fileBuffer.length,
+          size: fileBuffer?.length || fs.statSync(filePath).size,
         },
       };
     }
 
-    // Determine media type
     // Determine media type
     const ext = path.extname(filePath).toLowerCase();
     const formatName = metadata.format?.format_name?.toLowerCase() || '';
@@ -66,7 +66,7 @@ export const processMedia = async (filePath, scanId) => {
       hash,
       mediaType: isVideo ? 'VIDEO' : isAudio ? 'AUDIO' : isImage ? 'IMAGE' : 'UNKNOWN',
       duration: metadata.format?.duration || 0,
-      size: fileBuffer.length,
+      size: fileBuffer?.length || metadata.format?.size || 0,
       maxFrames: null, // populated below for video — forwarded to ML service
       metadata: {
         format: metadata.format?.format_name,
@@ -103,8 +103,9 @@ export const processMedia = async (filePath, scanId) => {
 
         // Adaptive frame sampling based on video duration (uses learned params if available)
         const duration = perceptionResults.duration || 0;
-        let frameRate = 4; // Default 4 fps
-        let maxFrames = 60; // Default max 60 frames
+        let frameRate = 4;
+        const configuredMaxFrames = Number.parseInt(process.env.ML_MAX_INFERENCE_FRAMES || '8', 10);
+        const maxFrames = Number.isFinite(configuredMaxFrames) ? Math.max(1, configuredMaxFrames) : 8;
 
         try {
           const learnedParams = await getPerceptionParams();
@@ -112,47 +113,23 @@ export const processMedia = async (filePath, scanId) => {
           const bucket = buckets.find(b => duration <= b.maxDuration);
           if (bucket) {
             frameRate = bucket.frameRate;
-            maxFrames = bucket.maxFrames;
             logger.info(`[PERCEPTION_AGENT] Using learned sampling params for duration=${duration}s`);
           }
         } catch {
-          // Fallback to adaptive defaults based on duration
-          if (duration <= 10) {
-            frameRate = 4; maxFrames = 40;
-          } else if (duration <= 30) {
-            frameRate = 3; maxFrames = 90;
-          } else if (duration <= 60) {
-            frameRate = 2; maxFrames = 120;
-          } else {
-            frameRate = 1; maxFrames = 120;
-          }
+          // Keep the learned/default cadence as a ceiling; the sample cap below
+          // keeps extraction aligned with the number of frames the model scores.
+          if (duration <= 10) frameRate = 4;
+          else if (duration <= 30) frameRate = 3;
+          else if (duration <= 60) frameRate = 2;
+          else frameRate = 1;
         }
 
+        if (duration > 0) frameRate = Math.min(frameRate, maxFrames / duration);
         logger.info(`[PERCEPTION_AGENT] Adaptive sampling: duration=${duration}s, fps=${frameRate}, maxFrames=${maxFrames}`);
 
-        let frames;
-
-        if (duration > 30) {
-          // For longer videos, scene-change detection picks the most visually distinct frames,
-          // giving the ML model diverse content rather than uniformly-sampled redundant frames.
-          try {
-            const sceneDir = path.join(processingDir, 'frames');
-            frames = await extractSceneChangeFrames(filePath, sceneDir, 0.3, maxFrames);
-            logger.info(`[PERCEPTION_AGENT] Scene-change extraction: ${frames.length} frames`);
-
-            // Fall back to uniform sampling if too few scene-change frames were found
-            if (frames.length < 5) {
-              logger.warn(`[PERCEPTION_AGENT] Scene detection yielded only ${frames.length} frames — falling back to uniform sampling`);
-              frames = await extractFrames(filePath, framesDir, frameRate, maxFrames);
-            }
-          } catch (sceneErr) {
-            logger.warn(`[PERCEPTION_AGENT] Scene-change extraction failed (${sceneErr.message}) — falling back to uniform sampling`);
-            frames = await extractFrames(filePath, framesDir, frameRate, maxFrames);
-          }
-        } else {
-          // Short videos: uniform sampling is fine and faster
-          frames = await extractFrames(filePath, framesDir, frameRate, maxFrames);
-        }
+        // Uniform sampling spans the whole clip and avoids the extra full-video
+        // scene-change pass on CPU-constrained deployments.
+        const frames = await extractFrames(filePath, framesDir, frameRate, maxFrames);
 
         perceptionResults.extractedFrames = (frames || []).map(f => path.resolve(f));
         perceptionResults.maxFrames = (frames || []).length; // tell ML service exactly how many frames we extracted
@@ -170,7 +147,7 @@ export const processMedia = async (filePath, scanId) => {
     }
 
     // Extract audio if video
-    if (isVideo) {
+    if (isVideo && !['true', '1', 'yes'].includes((process.env.DISABLE_AUDIO_MODEL || '').toLowerCase())) {
       try {
         const audioPath = path.join(processingDir, 'audio.wav');
         await extractAudio(filePath, audioPath);
@@ -179,6 +156,8 @@ export const processMedia = async (filePath, scanId) => {
       } catch (error) {
         logger.warn(`[PERCEPTION_AGENT] Audio extraction failed: ${error.message}`);
       }
+    } else if (isVideo) {
+      logger.info('[PERCEPTION_AGENT] Skipping audio extraction because audio inference is disabled');
     }
 
     // Normalize media (optional, for consistency)

@@ -55,7 +55,7 @@ _model_load_error = None
 # ---------------------------------------------------------------------------
 INFERENCE_CONFIG = {
     # Maximum frames to process per request (caller can send fewer via maxFrames)
-    'max_frames': int(os.environ.get('ML_MAX_FRAMES', '120')),
+    'max_frames': int(os.environ.get('ML_MAX_FRAMES', '8')),
     # Audio/video fusion weights (must sum to 1.0)
     'video_weight': float(os.environ.get('ML_VIDEO_WEIGHT', '0.60')),
     'audio_weight': float(os.environ.get('ML_AUDIO_WEIGHT', '0.40')),
